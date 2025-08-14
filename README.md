@@ -10,13 +10,15 @@ This repository contains code and configuration for decoding, processing, and an
 
 Each submodule contains its own `src/` directory with C++ source files and a `Makefile` for building the code. Some modules include additional scripts or configuration files.
 
+
 ## Getting Started
 
 1. Clone this repository:
    ```sh
    git clone https://github.com/maharnab/basket_raw_decode.git
    ```
-2. Navigate to the desired submodule and use the provided `Makefile` to build the code:
+2. All required C++ headers, including [nlohmann/json](https://github.com/nlohmann/json), are included in this repository under `include/nlohmann/json.hpp`. No additional installation is needed for JSON support.
+3. Navigate to the desired submodule and use the provided `Makefile` to build the code:
    ```sh
    cd full_basket_root
    make
