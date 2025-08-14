@@ -2,6 +2,8 @@
 
 This module contains the core C++ code for decoding and processing basket data. It provides utilities to deserialize binary basket files, display event data, and perform event integration.
 
+Caution: This code assumes that the order of the ADC device_id in the basket are in the same order that they appear in the raw data files. This might not always be correct. Refer `full_basket_root_adcMap` for more accurate conversion.
+
 ## Contents
 - `src/deserializeBin.cpp`: Functions to read and decode binary basket data files.
 - `src/displayEvents.cpp`: Code to display and analyze basket event data.
