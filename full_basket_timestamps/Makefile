@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I. $(shell root-config --cflags)
+CXXFLAGS = -std=c++17 -Wall -Wextra -I. -I$(realpath $(CURDIR)/../include) $(shell root-config --cflags)
 LDFLAGS = $(shell root-config --libs)
 
 # Project directory structure
