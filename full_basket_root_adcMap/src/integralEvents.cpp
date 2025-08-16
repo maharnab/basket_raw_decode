@@ -43,9 +43,6 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
     throw std::runtime_error("Basket number not found in adcMap.json: " + std::to_string(basket_num));
 }
 
-
-
-
 int main(int argc, char* argv[]) {
     // Get the directory of the running binary
     char exePath[4096];
@@ -138,7 +135,8 @@ int main(int argc, char* argv[]) {
     std::string outputFilePath;
     TFile* rootFile = nullptr;
     TTree* tree = nullptr;
-    int32_t event_number;
+    int32_t event_number; // Will be used as global event number
+    // int32_t file_event_number; // If you want to keep per-file event number, uncomment this
     uint32_t device_id;
     uint64_t timestamp; // ROOT expects ULong64_t for 'l' type
     int32_t channel_number;
@@ -210,6 +208,8 @@ int main(int argc, char* argv[]) {
         outputFilePath = (out_dir / out_name).string();
     }
 
+
+    int32_t global_event_number = 0;
     for (size_t file_idx = 0; file_idx < data_files.size(); ++file_idx) {
         const std::string& filePath = data_files[file_idx];
         if (std::filesystem::exists(filePath) && !std::filesystem::is_directory(filePath)) {
@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
 
                         wordOffset = 0;
                         eventNumber = static_cast<int>(words[0]);
-                        event_number = eventNumber;
+                        // event_number = eventNumber; // Remove this, use global_event_number instead
                         // Only initialize output on first event of first file (for single file mode, this is always true)
                         if (!output_initialized) {
                             uint64_t first_timestamp = 0;
@@ -393,6 +393,8 @@ int main(int argc, char* argv[]) {
                                             channel_number = adcValues[0] + int(adcOrder - 1) * 64;
                                             channel_value = integral * -1;
 
+                                            event_number = global_event_number;
+                                            global_event_number++;
                                             tree->Fill();
                                         }
                                     }
