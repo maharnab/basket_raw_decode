@@ -1,4 +1,5 @@
 
+
 #include <iostream>
 #include <iomanip>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <string>
 #include <chrono>
+#include <unistd.h>
 #include <nlohmann/json.hpp>
 #include "TFile.h"
 #include "TTree.h"
@@ -43,8 +45,17 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
 
 
 
+
 int main(int argc, char* argv[]) {
-    std::string adc_map_json = "../adcMap.json";
+    // Get the directory of the running binary
+    char exePath[4096];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string bin_dir = ".";
+    if (len != -1) {
+        exePath[len] = '\0';
+        bin_dir = std::filesystem::path(exePath).parent_path();
+    }
+    std::string adc_map_json = bin_dir + "/../adcMap.json";
     int arg_offset = 0;
     bool use_file_list = false;
     std::string file_list_path;
