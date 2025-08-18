@@ -91,6 +91,7 @@ int main(int argc, char* argv[]) {
     int minPosition_lower = -1;
     std::string base_dir;
     int basket_num = -1;
+    std::cerr << "[DEBUG] basket_num address at start of main: " << &basket_num << std::endl;
 
     if (use_file_list) {
         // -F mode: [other options] -F [file_list.txt] [minPosition_lower] [output_base_dir] [basket_number]
@@ -379,6 +380,13 @@ int main(int argc, char* argv[]) {
                         }
 
                         while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1)) {
+
+                            // Bounds check before accessing words vector
+                            if ((size_t)(1 + wordOffset) >= words.size() || (size_t)(2 + wordOffset) >= words.size() || (size_t)(4 + wordOffset) >= words.size() || (size_t)(5 + wordOffset) >= words.size()) {
+                                std::cerr << "[ERROR] Out-of-bounds access detected in event header parsing. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
+                                std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                exit(3);
+                            }
                             device_id = words[1 + wordOffset];
                             adcPayloadLength = static_cast<int>(words[2 + wordOffset] & 0xFFFFFF) / 4;
                             timeStampSec_ns = static_cast<uint64_t>(words[4 + wordOffset]) * 1e9;
@@ -409,20 +417,32 @@ int main(int argc, char* argv[]) {
                             }
 
                             if (adcPayloadLength > 5) {
+                                if ((size_t)(8 + wordOffset) >= words.size()) {
+                                    std::cerr << "[ERROR] Out-of-bounds access detected in ch_details. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
+                                    std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                    exit(4);
+                                }
                                 uint32_t ch_details = words[8 + wordOffset];
                                 uint8_t ch_details_last_byte = ch_details & 0xFF;
                                 waveform_words = (ch_details_last_byte - 1) / 4 + 1;
 
-                                for (int j = 0; j < (adcPayloadLength - 5) / waveform_words; j++) {
+                                int n_waveform_loops = (adcPayloadLength - 5) / waveform_words;
+                                for (int j = 0; j < n_waveform_loops; j++) {
                                     std::vector<int> adcValues;
                                     for (int k = 0; k < waveform_words; k++) {
+                                        size_t idx = 8 + j * waveform_words + k + wordOffset;
+                                        if (idx >= words.size()) {
+                                            std::cerr << "[ERROR] Out-of-bounds access detected in waveform loop. idx=" << idx << ", words.size()=" << words.size() << std::endl;
+                                            std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                            exit(5);
+                                        }
                                         if (k == 0) {
-                                            channelNumber = static_cast<int>((words[8 + j * waveform_words + k + wordOffset] >> 24) + 1);
+                                            channelNumber = static_cast<int>((words[idx] >> 24) + 1);
                                             adcValues.push_back(channelNumber);
                                         }
                                         if (k > 2) {
-                                            int16_t left = static_cast<int16_t>(words[8 + j * waveform_words + k + wordOffset] >> 16) & 0xFFFF;
-                                            int16_t right = static_cast<int16_t>(words[8 + j * waveform_words + k + wordOffset]) & 0xFFFF;
+                                            int16_t left = static_cast<int16_t>(words[idx] >> 16) & 0xFFFF;
+                                            int16_t right = static_cast<int16_t>(words[idx]) & 0xFFFF;
                                             adcValues.push_back(left - 30000);
                                             adcValues.push_back(right - 30000);
                                         }
@@ -433,6 +453,11 @@ int main(int argc, char* argv[]) {
 
                                     if (*minElement < -100) {
                                         if (minPosition > minPosition_lower && minPosition < minPosition_lower + 30) {
+                                            if ((minPosition - 4) < 0 || (minPosition + 16) > static_cast<int>(adcValues.size())) {
+                                                std::cerr << "[ERROR] Out-of-bounds access in slicedVector. minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
+                                                std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                                exit(6);
+                                            }
                                             std::vector<int> slicedVector(adcValues.begin() + minPosition - 4, adcValues.begin() + minPosition + 16);
 
                                             double pedestal = 0.0;
