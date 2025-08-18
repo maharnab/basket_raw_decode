@@ -406,18 +406,23 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             if (adcOrder == -1) {
-                                std::cerr << "[DEBUG] Entered ADC address error block. Current basket_num: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
+                                std::cerr << "[DEBUG] Entered ADC address error block. basket_num: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 std::cerr << "[DEBUG] basket_num address: " << &basket_num << ", canary address: " << &canary << std::endl;
+                                std::cerr << "[DEBUG] basket_num after address print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 std::cerr << "[DEBUG] adc_addresses vector: ";
                                 for (const auto& addr : adc_addresses) {
                                     std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << " ";
+                                    std::cerr << " [basket_num: " << std::dec << basket_num << ", canary: 0x" << std::hex << canary << std::dec << "] ";
                                 }
                                 std::cerr << std::endl;
+                                std::cerr << "[DEBUG] basket_num after adc_addresses vector print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 std::cerr << "[DEBUG] basket_num just before error print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 std::cerr << "ADC addresses for basket (DEBUG MARKER) " << basket_num << ":" << std::endl;
                                 for (const auto& addr : adc_addresses) {
-                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << std::endl;
+                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << " [basket_num: " << std::dec << basket_num << ", canary: 0x" << std::hex << canary << std::dec << "]" << std::endl;
+                                    std::cerr << "[DEBUG] basket_num after printing addr: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 }
+                                std::cerr << "[DEBUG] basket_num at end of error block: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 exit(2);
                             }
 
