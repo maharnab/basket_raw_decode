@@ -44,6 +44,20 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
 }
 
 int main(int argc, char* argv[]) {
+    // Debug: Print all key parameters at program start
+    std::cerr << "[DEBUG] Program parameters:" << std::endl;
+    std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
+    std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
+    std::cerr << "  base_dir: " << base_dir << std::endl;
+    std::cerr << "  basket_num: " << basket_num << std::endl;
+    std::cerr << "  use_file_list: " << (use_file_list ? "true" : "false") << std::endl;
+    if (use_file_list) {
+        std::cerr << "  file_list_path: " << file_list_path << std::endl;
+    }
+    std::cerr << "  data_files:" << std::endl;
+    for (const auto& f : data_files) {
+        std::cerr << "    " << f << std::endl;
+    }
     // Get the directory of the running binary
     char exePath[4096];
     ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
