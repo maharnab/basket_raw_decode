@@ -453,12 +453,16 @@ int main(int argc, char* argv[]) {
 
                                     if (*minElement < -100) {
                                         if (minPosition > minPosition_lower && minPosition < minPosition_lower + 30) {
-                                            if ((minPosition - 4) < 0 || (minPosition + 16) > static_cast<int>(adcValues.size())) {
+                                            int start_idx = minPosition - 4;
+                                            int end_idx = minPosition + 16;
+                                            if (start_idx < 0 || end_idx > static_cast<int>(adcValues.size())) {
                                                 std::cerr << "[ERROR] Out-of-bounds access in slicedVector. minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
+                                                std::cerr << "[ERROR] slicedVector indices: start_idx=" << start_idx << ", end_idx=" << end_idx << std::endl;
                                                 std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
                                                 exit(6);
                                             }
-                                            std::vector<int> slicedVector(adcValues.begin() + minPosition - 4, adcValues.begin() + minPosition + 16);
+                                            std::cerr << "[DEBUG] Constructing slicedVector: start_idx=" << start_idx << ", end_idx=" << end_idx << ", adcValues.size()=" << adcValues.size() << std::endl;
+                                            std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
                                             if (adcValues.size() > 10) {
