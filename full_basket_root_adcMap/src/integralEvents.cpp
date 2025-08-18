@@ -26,20 +26,27 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
     }
     json j;
     ifs >> j;
+    std::cerr << "[DEBUG] get_adc_addresses_from_json: Looking for basket_num " << basket_num << std::endl;
     for (const auto& basket : j) {
-        if (basket.contains("basket") && basket["basket"] == basket_num) {
-            std::vector<uint32_t> addresses;
-            for (int i = 1; i <= 12; ++i) {
-                std::string key = std::to_string(i);
-                if (basket.contains(key) && !basket[key].get<std::string>().empty()) {
-                    addresses.push_back(static_cast<uint32_t>(std::stoul(basket[key].get<std::string>(), nullptr, 16)));
-                } else {
-                    addresses.push_back(0); // or throw, or skip, depending on your needs
+        if (basket.contains("basket")) {
+            int json_basket_num = basket["basket"].get<int>();
+            std::cerr << "[DEBUG] Checking basket in JSON: " << json_basket_num << std::endl;
+            if (json_basket_num == basket_num) {
+                std::cerr << "[DEBUG] Matched basket_num " << basket_num << " in JSON." << std::endl;
+                std::vector<uint32_t> addresses;
+                for (int i = 1; i <= 12; ++i) {
+                    std::string key = std::to_string(i);
+                    if (basket.contains(key) && !basket[key].get<std::string>().empty()) {
+                        addresses.push_back(static_cast<uint32_t>(std::stoul(basket[key].get<std::string>(), nullptr, 16)));
+                    } else {
+                        addresses.push_back(0); // or throw, or skip, depending on your needs
+                    }
                 }
+                return addresses;
             }
-            return addresses;
         }
     }
+    std::cerr << "[DEBUG] No matching basket_num found in JSON for " << basket_num << std::endl;
     throw std::runtime_error("Basket number not found in adcMap.json: " + std::to_string(basket_num));
 }
 
