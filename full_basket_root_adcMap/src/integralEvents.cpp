@@ -26,13 +26,10 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
     }
     json j;
     ifs >> j;
-    std::cerr << "[DEBUG] get_adc_addresses_from_json: Looking for basket_num " << basket_num << std::endl;
     for (const auto& basket : j) {
         if (basket.contains("basket")) {
             int json_basket_num = basket["basket"].get<int>();
-            std::cerr << "[DEBUG] Checking basket in JSON: " << json_basket_num << std::endl;
             if (json_basket_num == basket_num) {
-                std::cerr << "[DEBUG] Matched basket_num " << basket_num << " in JSON." << std::endl;
                 std::vector<uint32_t> addresses;
                 for (int i = 1; i <= 12; ++i) {
                     std::string key = std::to_string(i);
@@ -46,7 +43,6 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
             }
         }
     }
-    std::cerr << "[DEBUG] No matching basket_num found in JSON for " << basket_num << std::endl;
     throw std::runtime_error("Basket number not found in adcMap.json: " + std::to_string(basket_num));
 }
 
@@ -116,18 +112,6 @@ int main(int argc, char* argv[]) {
             std::cerr << "No data files found in list." << std::endl;
             return 1;
         }
-        // Print debug info after all variables are initialized (file list mode)
-        std::cerr << "[DEBUG] Program parameters:" << std::endl;
-        std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
-        std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
-        std::cerr << "  base_dir: " << base_dir << std::endl;
-        std::cerr << "  basket_num: " << basket_num << std::endl;
-        std::cerr << "  use_file_list: true" << std::endl;
-        std::cerr << "  file_list_path: " << file_list_path << std::endl;
-        std::cerr << "  data_files:" << std::endl;
-        for (const auto& f : data_files) {
-            std::cerr << "    " << f << std::endl;
-        }
     } else {
         // Single file mode
         if (argc > 2 && std::string(argv[1]) == "-M") {
@@ -145,17 +129,6 @@ int main(int argc, char* argv[]) {
         minPosition_lower = atoi(argv[2 + arg_offset]);
         base_dir = argv[3 + arg_offset];
         basket_num = std::stoi(argv[4 + arg_offset]);
-        // Print debug info after all variables are initialized (single file mode)
-        std::cerr << "[DEBUG] Program parameters:" << std::endl;
-        std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
-        std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
-        std::cerr << "  base_dir: " << base_dir << std::endl;
-        std::cerr << "  basket_num: " << basket_num << std::endl;
-        std::cerr << "  use_file_list: false" << std::endl;
-        std::cerr << "  data_files:" << std::endl;
-        for (const auto& f : data_files) {
-            std::cerr << "    " << f << std::endl;
-        }
     }
 
     // Print debug info after all variables are initialized
@@ -441,7 +414,6 @@ int main(int argc, char* argv[]) {
                                                 std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
                                                 exit(6);
                                             }
-                                            std::cerr << "[DEBUG] Constructing slicedVector: start_idx=" << start_idx << ", end_idx=" << end_idx << ", adcValues.size()=" << adcValues.size() << std::endl;
                                             std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
