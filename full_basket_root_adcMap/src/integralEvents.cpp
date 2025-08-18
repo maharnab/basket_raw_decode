@@ -386,6 +386,12 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             if (adcOrder == -1) {
+                                std::cerr << "[DEBUG] Entered ADC address error block. Current basket_num: " << basket_num << std::endl;
+                                std::cerr << "[DEBUG] adc_addresses vector: ";
+                                for (const auto& addr : adc_addresses) {
+                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << " ";
+                                }
+                                std::cerr << std::endl;
                                 std::cerr << "ADC address not found: " << std::hex << std::setw(8) << std::setfill('0') << device_id << std::endl;
                                 std::cerr << "ADC addresses for basket " << basket_num << ":" << std::endl;
                                 for (const auto& addr : adc_addresses) {
