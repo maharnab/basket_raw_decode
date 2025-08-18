@@ -44,20 +44,7 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
 }
 
 int main(int argc, char* argv[]) {
-    // Debug: Print all key parameters at program start
-    std::cerr << "[DEBUG] Program parameters:" << std::endl;
-    std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
-    std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
-    std::cerr << "  base_dir: " << base_dir << std::endl;
-    std::cerr << "  basket_num: " << basket_num << std::endl;
-    std::cerr << "  use_file_list: " << (use_file_list ? "true" : "false") << std::endl;
-    if (use_file_list) {
-        std::cerr << "  file_list_path: " << file_list_path << std::endl;
-    }
-    std::cerr << "  data_files:" << std::endl;
-    for (const auto& f : data_files) {
-        std::cerr << "    " << f << std::endl;
-    }
+
     // Get the directory of the running binary
     char exePath[4096];
     ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
@@ -71,6 +58,10 @@ int main(int argc, char* argv[]) {
     bool use_file_list = false;
     std::string file_list_path;
     std::vector<std::string> data_files;
+    // minPosition_lower, base_dir, basket_num are declared below, do not redeclare here
+
+    // ...existing code...
+
 
     // Parse arguments
     for (int i = 1; i < argc; ++i) {
@@ -118,6 +109,18 @@ int main(int argc, char* argv[]) {
             std::cerr << "No data files found in list." << std::endl;
             return 1;
         }
+        // Print debug info after all variables are initialized (file list mode)
+        std::cerr << "[DEBUG] Program parameters:" << std::endl;
+        std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
+        std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
+        std::cerr << "  base_dir: " << base_dir << std::endl;
+        std::cerr << "  basket_num: " << basket_num << std::endl;
+        std::cerr << "  use_file_list: true" << std::endl;
+        std::cerr << "  file_list_path: " << file_list_path << std::endl;
+        std::cerr << "  data_files:" << std::endl;
+        for (const auto& f : data_files) {
+            std::cerr << "    " << f << std::endl;
+        }
     } else {
         // Single file mode
         if (argc > 2 && std::string(argv[1]) == "-M") {
@@ -135,6 +138,32 @@ int main(int argc, char* argv[]) {
         minPosition_lower = atoi(argv[2 + arg_offset]);
         base_dir = argv[3 + arg_offset];
         basket_num = std::stoi(argv[4 + arg_offset]);
+        // Print debug info after all variables are initialized (single file mode)
+        std::cerr << "[DEBUG] Program parameters:" << std::endl;
+        std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
+        std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
+        std::cerr << "  base_dir: " << base_dir << std::endl;
+        std::cerr << "  basket_num: " << basket_num << std::endl;
+        std::cerr << "  use_file_list: false" << std::endl;
+        std::cerr << "  data_files:" << std::endl;
+        for (const auto& f : data_files) {
+            std::cerr << "    " << f << std::endl;
+        }
+    }
+
+    // Print debug info after all variables are initialized
+    std::cerr << "[DEBUG] Program parameters:" << std::endl;
+    std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
+    std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
+    std::cerr << "  base_dir: " << base_dir << std::endl;
+    std::cerr << "  basket_num: " << basket_num << std::endl;
+    std::cerr << "  use_file_list: " << (use_file_list ? "true" : "false") << std::endl;
+    if (use_file_list) {
+        std::cerr << "  file_list_path: " << file_list_path << std::endl;
+    }
+    std::cerr << "  data_files:" << std::endl;
+    for (const auto& f : data_files) {
+        std::cerr << "    " << f << std::endl;
     }
 
     std::vector<uint32_t> adc_addresses;
@@ -240,7 +269,7 @@ int main(int argc, char* argv[]) {
                 unsigned int sync_word_evnt = 0x2A50D5AF;
 
                 int state = 0;
-                int eventNumber, channelNumber, adcPayloadLength;
+                int channelNumber, adcPayloadLength;
                 uint64_t timeStampNanoSec, timeStampSec_ns;
                 int64_t wordOffset = 0;
                 std::string deviceSerialNumber = "";
@@ -294,7 +323,7 @@ int main(int argc, char* argv[]) {
                         }
 
                         wordOffset = 0;
-                        eventNumber = static_cast<int>(words[0]);
+                        // eventNumber = static_cast<int>(words[0]); // Removed unused variable
                         // event_number = eventNumber; // Remove this, use global_event_number instead
                         // Only initialize output on first event of first file (for single file mode, this is always true)
                         if (!output_initialized) {
