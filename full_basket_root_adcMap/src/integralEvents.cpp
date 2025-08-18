@@ -91,9 +91,6 @@ int main(int argc, char* argv[]) {
     int minPosition_lower = -1;
     std::string base_dir;
     int basket_num = -1;
-    int canary = 0xDEADBEEF;
-    std::cerr << "[DEBUG] basket_num address at start of main: " << &basket_num << ", value: " << basket_num << std::endl;
-    std::cerr << "[DEBUG] canary address at start of main: " << &canary << ", value: 0x" << std::hex << canary << std::dec << std::endl;
 
     if (use_file_list) {
         // -F mode: [other options] -F [file_list.txt] [minPosition_lower] [output_base_dir] [basket_number]
@@ -124,8 +121,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
         std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
         std::cerr << "  base_dir: " << base_dir << std::endl;
-        std::cerr << "  basket_num: " << basket_num << " (address: " << &basket_num << ")" << std::endl;
-        std::cerr << "  canary: 0x" << std::hex << canary << std::dec << " (address: " << &canary << ")" << std::endl;
+        std::cerr << "  basket_num: " << basket_num << std::endl;
         std::cerr << "  use_file_list: true" << std::endl;
         std::cerr << "  file_list_path: " << file_list_path << std::endl;
         std::cerr << "  data_files:" << std::endl;
@@ -154,8 +150,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
         std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
         std::cerr << "  base_dir: " << base_dir << std::endl;
-        std::cerr << "  basket_num: " << basket_num << " (address: " << &basket_num << ")" << std::endl;
-        std::cerr << "  canary: 0x" << std::hex << canary << std::dec << " (address: " << &canary << ")" << std::endl;
+        std::cerr << "  basket_num: " << basket_num << std::endl;
         std::cerr << "  use_file_list: false" << std::endl;
         std::cerr << "  data_files:" << std::endl;
         for (const auto& f : data_files) {
@@ -164,20 +159,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Print debug info after all variables are initialized
-    std::cerr << "[DEBUG] Program parameters (final):" << std::endl;
-    std::cerr << "  adc_map_json: " << adc_map_json << std::endl;
-    std::cerr << "  minPosition_lower: " << minPosition_lower << std::endl;
-    std::cerr << "  base_dir: " << base_dir << std::endl;
-    std::cerr << "  basket_num: " << basket_num << " (address: " << &basket_num << ")" << std::endl;
-    std::cerr << "  canary: 0x" << std::hex << canary << std::dec << " (address: " << &canary << ")" << std::endl;
-    std::cerr << "  use_file_list: " << (use_file_list ? "true" : "false") << std::endl;
-    if (use_file_list) {
-        std::cerr << "  file_list_path: " << file_list_path << std::endl;
-    }
-    std::cerr << "  data_files:" << std::endl;
-    for (const auto& f : data_files) {
-        std::cerr << "    " << f << std::endl;
-    }
+    // ...existing code...
 
     std::vector<uint32_t> adc_addresses;
     try {
@@ -406,23 +388,11 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             if (adcOrder == -1) {
-                                std::cerr << "[DEBUG] Entered ADC address error block. basket_num: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
-                                std::cerr << "[DEBUG] basket_num address: " << &basket_num << ", canary address: " << &canary << std::endl;
-                                std::cerr << "[DEBUG] basket_num after address print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
-                                std::cerr << "[DEBUG] adc_addresses vector: ";
+                                std::cerr << "[ERROR] ADC address not found for device_id " << std::hex << device_id << std::dec << " in basket_num " << basket_num << std::endl;
+                                std::cerr << "ADC addresses for basket " << basket_num << ":" << std::endl;
                                 for (const auto& addr : adc_addresses) {
-                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << " ";
-                                    std::cerr << " [basket_num: " << std::dec << basket_num << ", canary: 0x" << std::hex << canary << std::dec << "] ";
+                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << std::endl;
                                 }
-                                std::cerr << std::endl;
-                                std::cerr << "[DEBUG] basket_num after adc_addresses vector print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
-                                std::cerr << "[DEBUG] basket_num just before error print: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
-                                std::cerr << "ADC addresses for basket (DEBUG MARKER) " << basket_num << ":" << std::endl;
-                                for (const auto& addr : adc_addresses) {
-                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << " [basket_num: " << std::dec << basket_num << ", canary: 0x" << std::hex << canary << std::dec << "]" << std::endl;
-                                    std::cerr << "[DEBUG] basket_num after printing addr: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
-                                }
-                                std::cerr << "[DEBUG] basket_num at end of error block: " << basket_num << ", canary: 0x" << std::hex << canary << std::dec << std::endl;
                                 exit(2);
                             }
 
