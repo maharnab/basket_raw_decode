@@ -133,12 +133,10 @@ int main(int argc, char* argv[]) {
         }
         std::time_t t = first_timestamp / 1000000000ULL;
         std::tm* tm_ptr = std::localtime(&t);
-        char year[5], year_month[8], year_month_day[11];
-        std::strftime(year, sizeof(year), "%Y", tm_ptr);
-        std::strftime(year_month, sizeof(year_month), "%Y-%m", tm_ptr);
+        char year_month_day[11];
         std::strftime(year_month_day, sizeof(year_month_day), "%Y-%m-%d", tm_ptr);
         std::string filename = prefix + "_" + first_num;
-        std::filesystem::path out_dir = std::filesystem::path(base_dir) / year / year_month / year_month_day / filename;
+        std::filesystem::path out_dir = std::filesystem::path(base_dir) / year_month_day / filename;
         std::filesystem::create_directories(out_dir);
         outputFilePath = (out_dir / out_name).string();
     }
@@ -241,7 +239,16 @@ int main(int argc, char* argv[]) {
                                 size_t data_pos = filename.rfind(".data");
                                 if (data_pos != std::string::npos) filename.erase(data_pos);
                                 out_name = filename + ".root";
-                                std::filesystem::path out_dir = std::filesystem::path(base_dir) / year / year_month / year_month_day / filename;
+                                std::time_t t = 0;
+                                if (words.size() > 5) {
+                                    uint64_t timeStampSec_ns = static_cast<uint64_t>(words[4]) * 1e9;
+                                    uint64_t timeStampNanoSec = static_cast<uint64_t>((words[5] & 0xFFFFFFFC) >> 2);
+                                    t = (timeStampSec_ns + timeStampNanoSec) / 1000000000ULL;
+                                }
+                                std::tm* tm_ptr = std::localtime(&t);
+                                char year_month_day[11];
+                                std::strftime(year_month_day, sizeof(year_month_day), "%Y-%m-%d", tm_ptr);
+                                std::filesystem::path out_dir = std::filesystem::path(base_dir) / year_month_day;
                                 std::filesystem::create_directories(out_dir);
                                 outputFilePath = (out_dir / out_name).string();
                             }

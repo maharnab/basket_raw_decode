@@ -17,12 +17,12 @@ This project provides tools for working with ADC mapping and event data for the 
 ### System Packages
 - C++17 compatible compiler (e.g., g++)
 - [ROOT](https://root.cern/) (for event-related programs)
-- [nlohmann-json3-dev](https://github.com/nlohmann/json) (header-only JSON library, required for integralEvents)
+
 
 #### Install on Ubuntu/Debian:
 ```sh
 sudo apt-get update
-sudo apt-get install g++ make nlohmann-json3-dev
+sudo apt-get install g++ make
 # Install ROOT as per https://root.cern/install/
 ```
 
