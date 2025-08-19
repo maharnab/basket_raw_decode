@@ -161,6 +161,14 @@ int main(int argc, char* argv[]) {
         flist.close();
     }
 
+    // Load ADC addresses for the selected basket before processing files
+    try {
+        adc_addresses = get_adc_addresses_from_json(adc_map_json, basket_num);
+    } catch (const std::exception& e) {
+        std::cerr << "[ERROR] " << e.what() << std::endl;
+        return 1;
+    }
+
     int32_t global_event_number = 0;
     bool reached_max_events = false;
     for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
@@ -316,11 +324,10 @@ int main(int argc, char* argv[]) {
                             }
                             if (adcOrder == -1) {
                                 std::cerr << "[ERROR] ADC address not found for device_id '" << device_id_str << "' in basket_num " << basket_num << std::endl;
-                                std::cerr << "[ERROR] ADC addresses for basket " << basket_num << ": ";
-                                for (const auto& addr : adc_addresses) {
-                                    std::cerr << "'" << addr << "' ";
+                                std::cerr << "[ERROR] ADC addresses for basket " << basket_num << ":\n";
+                                for (size_t i = 0; i < adc_addresses.size(); ++i) {
+                                    std::cerr << "  Channel " << (i+1) << ": '" << adc_addresses[i] << "'\n";
                                 }
-                                std::cerr << std::endl;
                                 exit(2);
                             }
 
