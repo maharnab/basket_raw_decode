@@ -1,18 +1,14 @@
 
-
 #include <iostream>
 #include <iomanip>
 #include <cstdint>
-#include <sstream>
 #include <fstream>
 #include <vector>
 #include <algorithm>
 #include <numeric>
-#include <map>
 #include <filesystem>
 #include <string>
 #include <chrono>
-#include <unistd.h>
 #include <nlohmann/json.hpp>
 #include "TFile.h"
 #include "TTree.h"
@@ -46,91 +42,113 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
     throw std::runtime_error("Basket number not found in adcMap.json: " + std::to_string(basket_num));
 }
 
+
+void print_usage() {
+    std::cout << "\nUsage: ./integralEvents [options] <datafile> <minPosition_lower> <output_path> <basket_number>\n";
+    std::cout << "       For multiple files, use -F <file_list.txt> instead of <datafile>.\n";
+    std::cout << "\nOptions:\n";
+    std::cout << "  -M <adcMap.json>         Path to ADC map JSON file (default: ../adcMap.json)\n";
+    std::cout << "  -F <file_list.txt>       Path to file containing list of .data files to process\n";
+    std::cout << "  --max-events <N>         Maximum number of events to process (default: unlimited)\n";
+    std::cout << "\nExample:\n";
+    std::cout << "  ./integralEvents -M /path/to/adcMap.json /path/to/data.data $MIN_POSITION $OUTPUT_PATH $BASKET_NUMBER\n";
+    std::cout << "\n";
+}
+
 int main(int argc, char* argv[]) {
-    // Show usage/help if no arguments are provided
     if (argc == 1) {
-        std::cout << "\nUsage: ./integralEvents [options]\n";
-        std::cout << "\nOptions:\n";
-        std::cout << "  -M <adcMap.json>         Path to ADC map JSON file (default: ../adcMap.json)\n";
-        std::cout << "  -F <file_list.txt>       Path to file containing list of .data files to process\n";
-        std::cout << "  --max-events <N>         Maximum number of events to process (default: unlimited)\n";
-        std::cout << "\nExamples:\n";
-        std::cout << "  ./integralEvents -M ../adcMap.json -F file_list.txt --max-events 1000\n";
-        std::cout << "  ./integralEvents -M ../adcMap.json datafile1.data datafile2.data\n";
-        std::cout << "\n";
+        print_usage();
         return 0;
     }
 
-    // Get the directory of the running binary
-    char exePath[4096];
-    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
-    std::string bin_dir = ".";
-    if (len != -1) {
-        exePath[len] = '\0';
-        bin_dir = std::filesystem::path(exePath).parent_path();
-    }
-    std::string adc_map_json = bin_dir + "/../adcMap.json";
-    // removed unused arg_offset
-    bool use_file_list = false;
+    // Variable declarations
+
+    // Argument variables
+    std::string adc_map_json = "../adcMap.json";
     std::string file_list_path;
     std::vector<std::string> data_files;
-    // minPosition_lower, base_dir, basket_num are declared below, do not redeclare here
+    int minPosition_lower = 0;
+    std::string base_dir;
+    int basket_num = -1;
+    int64_t max_events = -1;
+    bool use_file_list = false;
 
-
-    // Optional: max events to process
-    int64_t max_events = -1; // -1 means unlimited
-
-    // Variables needed throughout main
+    // Output/processing variables
+    auto start = std::chrono::high_resolution_clock::now();
     bool output_initialized = false;
     std::string outputFilePath;
     TFile* rootFile = nullptr;
     TTree* tree = nullptr;
-    int32_t event_number; // global event number
-    uint32_t device_id;
-    uint64_t timestamp;
-    int32_t channel_number;
-    int32_t channel_value;
+    int event_number = 0;
+    uint32_t device_id = 0;
+    uint64_t timestamp = 0;
+    int channel_number = 0;
+    int channel_value = 0;
     std::vector<uint32_t> adc_addresses;
-    int basket_num = -1;
-    std::string base_dir;
-    int minPosition_lower = -1;
-    auto start = std::chrono::high_resolution_clock::now();
 
-    // ...existing code...
-
-
-    // Parse arguments and collect data files
+    // Unified argument parsing
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "-M") {
+        std::string arg = argv[i];
+        if (arg == "-M") {
             if (i + 1 < argc) {
-                adc_map_json = argv[i + 1];
-                i++;
-            }
-        } else if (std::string(argv[i]) == "-F") {
-            if (i + 1 < argc) {
-                use_file_list = true;
-                file_list_path = argv[i + 1];
-                i++;
-            }
-        } else if (std::string(argv[i]) == "--max-events") {
-            if (i + 1 < argc) {
-                max_events = std::stoll(argv[i + 1]);
-                i++;
+                adc_map_json = argv[++i];
             } else {
-                std::cerr << "Error: --max-events requires a value." << std::endl;
+                std::cerr << "[ERROR] -M requires a path to adcMap.json.\n";
+                print_usage();
                 return 1;
             }
-        } else if (argv[i][0] != '-') {
-            // Positional argument, treat as data file
-            data_files.push_back(argv[i]);
+        } else if (arg == "-F") {
+            if (i + 1 < argc) {
+                use_file_list = true;
+                file_list_path = argv[++i];
+            } else {
+                std::cerr << "[ERROR] -F requires a file list path.\n";
+                print_usage();
+                return 1;
+            }
+        } else if (arg == "--max-events") {
+            if (i + 1 < argc) {
+                max_events = std::stoll(argv[++i]);
+            } else {
+                std::cerr << "[ERROR] --max-events requires a value.\n";
+                print_usage();
+                return 1;
+            }
+        } else if (arg[0] != '-') {
+            data_files.push_back(arg);
         }
+    }
+
+    // Positional argument validation and assignment
+    if (use_file_list) {
+        if (data_files.size() < 3) {
+            std::cerr << "[ERROR] Not enough positional arguments after -F <file_list.txt>.\n";
+            print_usage();
+            return 1;
+        }
+        minPosition_lower = std::stoi(data_files[data_files.size() - 3]);
+        base_dir = data_files[data_files.size() - 2];
+        basket_num = std::stoi(data_files[data_files.size() - 1]);
+        data_files.resize(data_files.size() - 3); // Only file list files remain
+    } else {
+        if (data_files.size() < 4) {
+            std::cerr << "[ERROR] Not enough positional arguments.\n";
+            print_usage();
+            return 1;
+        }
+        minPosition_lower = std::stoi(data_files[data_files.size() - 3]);
+        base_dir = data_files[data_files.size() - 2];
+        basket_num = std::stoi(data_files[data_files.size() - 1]);
+        std::string datafile = data_files[0];
+        data_files.clear();
+        data_files.push_back(datafile);
     }
 
     // If -F was used, read file list and populate data_files
     if (use_file_list) {
         std::ifstream flist(file_list_path);
         if (!flist.is_open()) {
-            std::cerr << "Error: Could not open file list: " << file_list_path << std::endl;
+            std::cerr << "[ERROR] Could not open file list: " << file_list_path << std::endl;
             return 1;
         }
         std::string line;
@@ -144,11 +162,12 @@ int main(int argc, char* argv[]) {
     bool reached_max_events = false;
     for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
         const std::string& filePath = data_files[file_idx];
+
         if (std::filesystem::exists(filePath) && !std::filesystem::is_directory(filePath)) {
             if (filePath.size() >= 5 && filePath.substr(filePath.size() - 5) == ".data") {
                 std::ifstream file(filePath, std::ios::binary);
                 if (!file.is_open()) {
-                    std::cerr << "Failed to open the file: " << filePath << std::endl;
+                    std::cerr << "[ERROR] Failed to open the file: " << filePath << std::endl;
                     return 1;
                 }
 
@@ -261,8 +280,8 @@ int main(int argc, char* argv[]) {
                         while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
                             // Bounds check before accessing words vector
                             if ((size_t)(1 + wordOffset) >= words.size() || (size_t)(2 + wordOffset) >= words.size() || (size_t)(4 + wordOffset) >= words.size() || (size_t)(5 + wordOffset) >= words.size()) {
-                                std::cerr << "[ERROR] Out-of-bounds access detected in event header parsing. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
-                                std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                std::cerr << "[ERROR] Out-of-bounds access in event header parsing. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
+                                std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                 exit(3);
                             }
                             device_id = words[1 + wordOffset];
@@ -289,18 +308,19 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             if (adcOrder == -1) {
-                                std::cerr << "[ERROR] ADC address not found for device_id " << std::hex << device_id << std::dec << " in basket_num " << basket_num << std::endl;
-                                std::cerr << "ADC addresses for basket " << basket_num << ":" << std::endl;
+                                std::cerr << "[ERROR] ADC address not found for device_id 0x" << std::hex << device_id << std::dec << " in basket_num " << basket_num << std::endl;
+                                std::cerr << "[ERROR] ADC addresses for basket " << basket_num << ": ";
                                 for (const auto& addr : adc_addresses) {
-                                    std::cerr << std::hex << std::setw(8) << std::setfill('0') << addr << std::endl;
+                                    std::cerr << "0x" << std::hex << std::setw(8) << std::setfill('0') << addr << " ";
                                 }
+                                std::cerr << std::dec << std::endl;
                                 exit(2);
                             }
 
                             if (adcPayloadLength > 5) {
                                 if ((size_t)(8 + wordOffset) >= words.size()) {
-                                    std::cerr << "[ERROR] Out-of-bounds access detected in ch_details. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
-                                    std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                    std::cerr << "[ERROR] Out-of-bounds access in ch_details. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
+                                    std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                     exit(4);
                                 }
                                 uint32_t ch_details = words[8 + wordOffset];
@@ -313,8 +333,8 @@ int main(int argc, char* argv[]) {
                                     for (int k = 0; k < waveform_words; k++) {
                                         size_t idx = 8 + j * waveform_words + k + wordOffset;
                                         if (idx >= words.size()) {
-                                            std::cerr << "[ERROR] Out-of-bounds access detected in waveform loop. idx=" << idx << ", words.size()=" << words.size() << std::endl;
-                                            std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                            std::cerr << "[ERROR] Out-of-bounds access in waveform loop. idx=" << idx << ", words.size()=" << words.size() << std::endl;
+                                            std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                             exit(5);
                                         }
                                         if (k == 0) {
@@ -339,7 +359,7 @@ int main(int argc, char* argv[]) {
                                             if (start_idx < 0 || end_idx > static_cast<int>(adcValues.size())) {
                                                 std::cerr << "[ERROR] Out-of-bounds access in slicedVector. minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
                                                 std::cerr << "[ERROR] slicedVector indices: start_idx=" << start_idx << ", end_idx=" << end_idx << std::endl;
-                                                std::cerr << "[ERROR] basket_num address: " << &basket_num << ", value: " << basket_num << std::endl;
+                                                std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                                 exit(6);
                                             }
                                             std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
