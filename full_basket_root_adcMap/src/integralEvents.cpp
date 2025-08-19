@@ -15,7 +15,7 @@
 
 using json = nlohmann::json;
 
-std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, int basket_num) {
+std::vector<std::string> get_adc_addresses_from_json(const std::string& json_file, int basket_num) {
     std::ifstream ifs(json_file);
     if (!ifs.is_open()) {
         throw std::runtime_error("Failed to open adcMap.json file: " + json_file);
@@ -26,13 +26,16 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
         if (basket.contains("basket")) {
             int json_basket_num = basket["basket"].get<int>();
             if (json_basket_num == basket_num) {
-                std::vector<uint32_t> addresses;
+                std::vector<std::string> addresses;
                 for (int i = 1; i <= 12; ++i) {
                     std::string key = std::to_string(i);
                     if (basket.contains(key) && !basket[key].get<std::string>().empty()) {
-                        addresses.push_back(static_cast<uint32_t>(std::stoul(basket[key].get<std::string>(), nullptr, 16)));
+                        std::string addr = basket[key].get<std::string>();
+                        // preserve leading zeros, convert to lowercase for consistency
+                        std::transform(addr.begin(), addr.end(), addr.begin(), ::tolower);
+                        addresses.push_back(addr);
                     } else {
-                        addresses.push_back(0); // or throw, or skip, depending on your needs
+                        addresses.push_back("");
                     }
                 }
                 return addresses;
@@ -84,7 +87,7 @@ int main(int argc, char* argv[]) {
     uint64_t timestamp = 0;
     int channel_number = 0;
     int channel_value = 0;
-    std::vector<uint32_t> adc_addresses;
+    std::vector<std::string> adc_addresses;
 
     // Unified argument parsing
     for (int i = 1; i < argc; ++i) {
@@ -285,6 +288,10 @@ int main(int argc, char* argv[]) {
                                 exit(3);
                             }
                             device_id = words[1 + wordOffset];
+                            // Convert device_id to hex string with leading zeros, lowercase
+                            std::stringstream device_id_ss;
+                            device_id_ss << std::hex << std::setw(8) << std::setfill('0') << std::nouppercase << device_id;
+                            std::string device_id_str = device_id_ss.str();
                             adcPayloadLength = static_cast<int>(words[2 + wordOffset] & 0xFFFFFF) / 4;
                             timeStampSec_ns = static_cast<uint64_t>(words[4 + wordOffset]) * 1e9;
                             timeStampNanoSec = static_cast<uint64_t>((words[5 + wordOffset] & 0xFFFFFFFC) >> 2);
@@ -302,18 +309,18 @@ int main(int argc, char* argv[]) {
 
                             int adcOrder = -1;
                             for (size_t idx = 0; idx < adc_addresses.size(); ++idx) {
-                                if (device_id == adc_addresses[idx]) {
+                                if (device_id_str == adc_addresses[idx]) {
                                     adcOrder = static_cast<int>(idx) + 1;
                                     break;
                                 }
                             }
                             if (adcOrder == -1) {
-                                std::cerr << "[ERROR] ADC address not found for device_id 0x" << std::hex << device_id << std::dec << " in basket_num " << basket_num << std::endl;
+                                std::cerr << "[ERROR] ADC address not found for device_id '" << device_id_str << "' in basket_num " << basket_num << std::endl;
                                 std::cerr << "[ERROR] ADC addresses for basket " << basket_num << ": ";
                                 for (const auto& addr : adc_addresses) {
-                                    std::cerr << "0x" << std::hex << std::setw(8) << std::setfill('0') << addr << " ";
+                                    std::cerr << "'" << addr << "' ";
                                 }
-                                std::cerr << std::dec << std::endl;
+                                std::cerr << std::endl;
                                 exit(2);
                             }
 
