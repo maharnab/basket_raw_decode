@@ -99,19 +99,17 @@ int main(int argc, char* argv[]) {
     // ...existing code...
 
 
-    // Parse arguments
+    // Parse arguments and collect data files
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "-M") {
             if (i + 1 < argc) {
                 adc_map_json = argv[i + 1];
-                // removed unused arg_offset
                 i++;
             }
         } else if (std::string(argv[i]) == "-F") {
             if (i + 1 < argc) {
                 use_file_list = true;
                 file_list_path = argv[i + 1];
-                // removed unused arg_offset
                 i++;
             }
         } else if (std::string(argv[i]) == "--max-events") {
@@ -122,7 +120,24 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: --max-events requires a value." << std::endl;
                 return 1;
             }
+        } else if (argv[i][0] != '-') {
+            // Positional argument, treat as data file
+            data_files.push_back(argv[i]);
         }
+    }
+
+    // If -F was used, read file list and populate data_files
+    if (use_file_list) {
+        std::ifstream flist(file_list_path);
+        if (!flist.is_open()) {
+            std::cerr << "Error: Could not open file list: " << file_list_path << std::endl;
+            return 1;
+        }
+        std::string line;
+        while (std::getline(flist, line)) {
+            if (!line.empty()) data_files.push_back(line);
+        }
+        flist.close();
     }
 
     int32_t global_event_number = 0;
