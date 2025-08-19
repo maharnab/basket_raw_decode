@@ -305,9 +305,8 @@ int main(int argc, char* argv[]) {
                             timeStampNanoSec = static_cast<uint64_t>((words[5 + wordOffset] & 0xFFFFFFFC) >> 2);
                             timestamp = timeStampSec_ns + timeStampNanoSec;
 
-                            // Assign event_number once per event
+                            // Assign event_number once per event (increment after full event below)
                             event_number = global_event_number;
-                            global_event_number++;
 
                             // Check if we've reached the max events
                             if (max_events > 0 && event_number >= max_events) {
@@ -400,6 +399,9 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                             wordOffset += (2 + adcPayloadLength);
+
+                            // Increment global_event_number only after a full event is processed
+                            global_event_number++;
                         }
 
                         words.clear();
