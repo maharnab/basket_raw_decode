@@ -47,6 +47,19 @@ std::vector<uint32_t> get_adc_addresses_from_json(const std::string& json_file, 
 }
 
 int main(int argc, char* argv[]) {
+    // Show usage/help if no arguments are provided
+    if (argc == 1) {
+        std::cout << "\nUsage: ./integralEvents [options]\n";
+        std::cout << "\nOptions:\n";
+        std::cout << "  -M <adcMap.json>         Path to ADC map JSON file (default: ../adcMap.json)\n";
+        std::cout << "  -F <file_list.txt>       Path to file containing list of .data files to process\n";
+        std::cout << "  --max-events <N>         Maximum number of events to process (default: unlimited)\n";
+        std::cout << "\nExamples:\n";
+        std::cout << "  ./integralEvents -M ../adcMap.json -F file_list.txt --max-events 1000\n";
+        std::cout << "  ./integralEvents -M ../adcMap.json datafile1.data datafile2.data\n";
+        std::cout << "\n";
+        return 0;
+    }
 
     // Get the directory of the running binary
     char exePath[4096];
@@ -57,11 +70,31 @@ int main(int argc, char* argv[]) {
         bin_dir = std::filesystem::path(exePath).parent_path();
     }
     std::string adc_map_json = bin_dir + "/../adcMap.json";
-    int arg_offset = 0;
+    // removed unused arg_offset
     bool use_file_list = false;
     std::string file_list_path;
     std::vector<std::string> data_files;
     // minPosition_lower, base_dir, basket_num are declared below, do not redeclare here
+
+
+    // Optional: max events to process
+    int64_t max_events = -1; // -1 means unlimited
+
+    // Variables needed throughout main
+    bool output_initialized = false;
+    std::string outputFilePath;
+    TFile* rootFile = nullptr;
+    TTree* tree = nullptr;
+    int32_t event_number; // global event number
+    uint32_t device_id;
+    uint64_t timestamp;
+    int32_t channel_number;
+    int32_t channel_value;
+    std::vector<uint32_t> adc_addresses;
+    int basket_num = -1;
+    std::string base_dir;
+    int minPosition_lower = -1;
+    auto start = std::chrono::high_resolution_clock::now();
 
     // ...existing code...
 
@@ -71,155 +104,30 @@ int main(int argc, char* argv[]) {
         if (std::string(argv[i]) == "-M") {
             if (i + 1 < argc) {
                 adc_map_json = argv[i + 1];
-                arg_offset = i + 1;
+                // removed unused arg_offset
                 i++;
             }
         } else if (std::string(argv[i]) == "-F") {
             if (i + 1 < argc) {
                 use_file_list = true;
                 file_list_path = argv[i + 1];
-                arg_offset = i + 1;
+                // removed unused arg_offset
                 i++;
             }
-        }
-    }
-
-    int minPosition_lower = -1;
-    std::string base_dir;
-    int basket_num = -1;
-
-    if (use_file_list) {
-        // -F mode: [other options] -F [file_list.txt] [minPosition_lower] [output_base_dir] [basket_number]
-        if (argc < arg_offset + 4) {
-            std::cerr << "Usage: " << argv[0] << " [-M adcMap_snap.json] -F [file_list.txt] [minPosition_lower] [output_base_dir] [basket_number]" << std::endl;
-            return 1;
-        }
-        minPosition_lower = atoi(argv[arg_offset + 1]);
-        base_dir = argv[arg_offset + 2];
-        basket_num = std::stoi(argv[arg_offset + 3]);
-        // Read file list
-        std::ifstream flist(file_list_path);
-        if (!flist.is_open()) {
-            std::cerr << "Failed to open file list: " << file_list_path << std::endl;
-            return 1;
-        }
-        std::string line;
-        while (std::getline(flist, line)) {
-            if (!line.empty()) data_files.push_back(line);
-        }
-        flist.close();
-        if (data_files.empty()) {
-            std::cerr << "No data files found in list." << std::endl;
-            return 1;
-        }
-    } else {
-        // Single file mode
-        if (argc > 2 && std::string(argv[1]) == "-M") {
-            if (argc < 7) {
-                std::cerr << "Usage: " << argv[0] << " -M [adcMap_snap.json] [binary_file_directory_path] [minPosition_lower] [output_base_dir] [basket_number]" << std::endl;
+        } else if (std::string(argv[i]) == "--max-events") {
+            if (i + 1 < argc) {
+                max_events = std::stoll(argv[i + 1]);
+                i++;
+            } else {
+                std::cerr << "Error: --max-events requires a value." << std::endl;
                 return 1;
             }
-            arg_offset = 2;
-        } else if (argc < 5) {
-            std::cerr << "Usage: " << argv[0] << " [binary_file_directory_path] [minPosition_lower] [output_base_dir] [basket_number]" << std::endl;
-            std::cerr << "   or: " << argv[0] << " -M [adcMap_snap.json] [binary_file_directory_path] [minPosition_lower] [output_base_dir] [basket_number]" << std::endl;
-            return 1;
         }
-        data_files.push_back(argv[1 + arg_offset]);
-        minPosition_lower = atoi(argv[2 + arg_offset]);
-        base_dir = argv[3 + arg_offset];
-        basket_num = std::stoi(argv[4 + arg_offset]);
     }
-
-    // Print debug info after all variables are initialized
-    // ...existing code...
-
-    std::vector<uint32_t> adc_addresses;
-    try {
-        adc_addresses = get_adc_addresses_from_json(adc_map_json, basket_num);
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return 1;
-    }
-    auto start = std::chrono::high_resolution_clock::now();
-
-    std::string outputFilePath;
-    TFile* rootFile = nullptr;
-    TTree* tree = nullptr;
-    int32_t event_number; // Will be used as global event number
-    // int32_t file_event_number; // If you want to keep per-file event number, uncomment this
-    uint32_t device_id;
-    uint64_t timestamp; // ROOT expects ULong64_t for 'l' type
-    int32_t channel_number;
-    int32_t channel_value;
-    bool output_initialized = false;
-
-    // Determine output file name if using file list
-    if (use_file_list) {
-        // Get first and last file names
-        std::string first_file = std::filesystem::path(data_files.front()).filename().string();
-        std::string last_file = std::filesystem::path(data_files.back()).filename().string();
-        // Extract prefix and last number
-        size_t dash_pos = first_file.find_last_of("_");
-        size_t dot_pos = last_file.rfind(".data");
-        std::string prefix = (dash_pos != std::string::npos) ? first_file.substr(0, dash_pos) : first_file;
-        std::string first_num = (dash_pos != std::string::npos) ? first_file.substr(dash_pos + 1, first_file.find(".data") - dash_pos - 1) : "";
-        std::string last_num = (dot_pos != std::string::npos) ? last_file.substr(last_file.find_last_of("_") + 1, dot_pos - last_file.find_last_of("_") - 1) : "";
-        std::string out_name = prefix + "_" + first_num + "-" + last_num + ".root";
-        // Use first file's timestamp for directory structure
-        std::string first_file_path = data_files.front();
-        std::ifstream file(first_file_path, std::ios::binary);
-        uint64_t first_timestamp = 0;
-        if (file.is_open()) {
-            // Read enough to get timestamp (skip to event header)
-            int64_t bufferSize = 4;
-            std::vector<char> buffer(bufferSize);
-            int state = 0;
-            unsigned int sync_word_evnt = 0x2A50D5AF;
-            std::vector<uint32_t> words;
-            while (file.read(buffer.data(), bufferSize)) {
-                if (bufferSize == 4) {
-                    uint32_t word = static_cast<uint8_t>(buffer[3]) << 24 |
-                                    static_cast<uint8_t>(buffer[2]) << 16 |
-                                    static_cast<uint8_t>(buffer[1]) << 8 |
-                                    static_cast<uint8_t>(buffer[0]);
-                    if (word == sync_word_evnt && state == 0) {
-                        state++;
-                    } else if (state == 1) {
-                        bufferSize = static_cast<int>(word);
-                        buffer.resize(bufferSize);
-                    }
-                } else if (bufferSize > 4) {
-                    for (int i = 0; i < bufferSize / 4; i++) {
-                        uint32_t word = static_cast<uint8_t>(buffer[3 + 4 * i]) << 24 |
-                                        static_cast<uint8_t>(buffer[2 + 4 * i]) << 16 |
-                                        static_cast<uint8_t>(buffer[1 + 4 * i]) << 8 |
-                                        static_cast<uint8_t>(buffer[0 + 4 * i]);
-                        words.push_back(word);
-                    }
-                    if (words.size() > 5) {
-                        uint64_t timeStampSec_ns = static_cast<uint64_t>(words[4]) * 1e9;
-                        uint64_t timeStampNanoSec = static_cast<uint64_t>((words[5] & 0xFFFFFFFC) >> 2);
-                        first_timestamp = timeStampSec_ns + timeStampNanoSec;
-                    }
-                    break;
-                }
-            }
-            file.close();
-        }
-        std::time_t t = first_timestamp / 1000000000ULL;
-        std::tm* tm_ptr = std::localtime(&t);
-        char year_month_day[11];
-        std::strftime(year_month_day, sizeof(year_month_day), "%Y-%m-%d", tm_ptr);
-        std::string filename = prefix + "_" + first_num;
-        std::filesystem::path out_dir = std::filesystem::path(base_dir) / year_month_day / filename;
-        std::filesystem::create_directories(out_dir);
-        outputFilePath = (out_dir / out_name).string();
-    }
-
 
     int32_t global_event_number = 0;
-    for (size_t file_idx = 0; file_idx < data_files.size(); ++file_idx) {
+    bool reached_max_events = false;
+    for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
         const std::string& filePath = data_files[file_idx];
         if (std::filesystem::exists(filePath) && !std::filesystem::is_directory(filePath)) {
             if (filePath.size() >= 5 && filePath.substr(filePath.size() - 5) == ".data") {
@@ -255,7 +163,7 @@ int main(int argc, char* argv[]) {
                 int waveform_words;
                 int lastPercentage = -1;
 
-                while (bytesRead < totalSize && file.read(buffer.data(), bufferSize)) {
+                while (bytesRead < totalSize && file.read(buffer.data(), bufferSize) && !reached_max_events) {
                     int percentage = (double)bytesRead / totalSize * 100;
                     if (percentage != lastPercentage) {
                         auto end = std::chrono::high_resolution_clock::now();
@@ -289,8 +197,6 @@ int main(int argc, char* argv[]) {
                         }
 
                         wordOffset = 0;
-                        // eventNumber = static_cast<int>(words[0]); // Removed unused variable
-                        // event_number = eventNumber; // Remove this, use global_event_number instead
                         // Only initialize output on first event of first file (for single file mode, this is always true)
                         if (!output_initialized) {
                             uint64_t first_timestamp = 0;
@@ -337,8 +243,7 @@ int main(int argc, char* argv[]) {
                             output_initialized = true;
                         }
 
-                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1)) {
-
+                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
                             // Bounds check before accessing words vector
                             if ((size_t)(1 + wordOffset) >= words.size() || (size_t)(2 + wordOffset) >= words.size() || (size_t)(4 + wordOffset) >= words.size() || (size_t)(5 + wordOffset) >= words.size()) {
                                 std::cerr << "[ERROR] Out-of-bounds access detected in event header parsing. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
@@ -350,6 +255,16 @@ int main(int argc, char* argv[]) {
                             timeStampSec_ns = static_cast<uint64_t>(words[4 + wordOffset]) * 1e9;
                             timeStampNanoSec = static_cast<uint64_t>((words[5 + wordOffset] & 0xFFFFFFFC) >> 2);
                             timestamp = timeStampSec_ns + timeStampNanoSec;
+
+                            // Assign event_number once per event
+                            event_number = global_event_number;
+                            global_event_number++;
+
+                            // Check if we've reached the max events
+                            if (max_events > 0 && event_number >= max_events) {
+                                reached_max_events = true;
+                                break;
+                            }
 
                             int adcOrder = -1;
                             for (size_t idx = 0; idx < adc_addresses.size(); ++idx) {
@@ -429,8 +344,7 @@ int main(int argc, char* argv[]) {
                                             channel_number = adcValues[0] + int(adcOrder - 1) * 64;
                                             channel_value = integral * -1;
 
-                                            event_number = global_event_number;
-                                            global_event_number++;
+                                            // event_number is already set for this event
                                             tree->Fill();
                                         }
                                     }
@@ -452,6 +366,7 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+
 
     if (output_initialized) {
         rootFile->Write();

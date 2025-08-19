@@ -28,16 +28,16 @@ Each submodule contains its own `src/` directory with C++ source files and a `Ma
 ## Submodules Overview
 
 ### full_basket_root
-- C++ code for deserializing binary basket data and displaying/integrating events.
-- See `full_basket_root/README.md` for details.
+- C++ code for deserializing binary basket data and displaying/integrating events. As of August 2025, the integration tool supports global event numbering and the `--max-events` argument.
+- See `full_basket_root/README.md` for details and updated usage.
 
 ### full_basket_root_adcMap
 - Contains ADC mapping JSON files and scripts for direct ADC map extraction.
-- Python and C++ utilities for advanced basket data analysis.
-- See `full_basket_root_adcMap/README.md` for more information.
+- Python and C++ utilities for advanced basket data analysis. The `integralEvents` tool now supports global event numbering and the `--max-events` argument.
+- See `full_basket_root_adcMap/README.md` for more information and updated usage.
 
 ### full_basket_timestamps
-- Focused on timestamp extraction and event integration for basket data.
+- Focused on timestamp extraction and event integration for basket data. The integration tool supports global event numbering and the `--max-events` argument.
 - See `full_basket_timestamps/README.md` for details.
 
 ## License

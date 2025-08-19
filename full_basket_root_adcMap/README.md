@@ -83,20 +83,24 @@ make clean
 
 
 ### 4. integralEvents
-- **Purpose:** Processes or integrates event data, possibly for summary statistics or further analysis.
+
+- **Purpose:** Processes or integrates event data, possibly for summary statistics or further analysis. As of August 2025, event numbers are assigned globally per event (not per channel), and you can optionally limit the number of events processed.
+
 - **Usage:**
 
   Standard mode (uses `adcMap.json`):
   ```sh
-  ./integralEvents <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number>
+  ./integralEvents <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number> [--max-events N]
   ```
 
   With custom ADC map (e.g., a snapshot file):
   ```sh
-  ./integralEvents -M <adcMap_snap_YYYYMMDD_HHMMSS.json> <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number>
+  ./integralEvents -M <adcMap_snap_YYYYMMDD_HHMMSS.json> <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number> [--max-events N]
   ```
 
-  If the `-M` option is used, the ADC order will be taken from the specified snapshot file instead of the default `adcMap.json`.
+  - The optional `--max-events N` argument will process only the first N global events from the data file(s).
+  - If the `-M` option is used, the ADC order will be taken from the specified snapshot file instead of the default `adcMap.json`.
+
 - **Dependencies:** Requires ROOT libraries.
 
 ## Notes

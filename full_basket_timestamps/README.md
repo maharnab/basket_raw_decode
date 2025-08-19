@@ -3,7 +3,7 @@
 This module provides utilities for extracting and integrating timestamp data from basket event files.
 
 ## Contents
-- `src/integralEvents.cpp`: C++ code for integrating event data, with a focus on timestamp handling.
+- `src/integralEvents.cpp`: C++ code for integrating event data, with a focus on timestamp handling. As of August 2025, event numbers are global per event (not per channel), and the program supports an optional `--max-events N` argument to limit the number of events processed.
 - `Makefile`: Build instructions for compiling the code in this module.
 
 ## Usage

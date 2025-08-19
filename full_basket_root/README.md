@@ -7,7 +7,7 @@ Caution: This code assumes that the order of the ADC device_id in the basket are
 ## Contents
 - `src/deserializeBin.cpp`: Functions to read and decode binary basket data files.
 - `src/displayEvents.cpp`: Code to display and analyze basket event data.
-- `src/integralEvents.cpp`: Tools for integrating event data over time or other parameters.
+- `src/integralEvents.cpp`: Tools for integrating event data over time or other parameters. As of August 2025, event numbers are global per event (not per channel), and the program supports an optional `--max-events N` argument to limit the number of events processed.
 - `Makefile`: Build instructions for compiling the C++ code in this module.
 
 ## Usage
