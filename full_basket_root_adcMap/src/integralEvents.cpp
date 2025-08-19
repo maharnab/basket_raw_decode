@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    int32_t global_event_number = 0;
+    int32_t event_number_offset = 0;
     bool reached_max_events = false;
     for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
         const std::string& filePath = data_files[file_idx];
@@ -288,15 +288,13 @@ int main(int argc, char* argv[]) {
                             output_initialized = true;
                         }
 
+                        // Trust event block structure: each event is a block, process all ADCs for the event
+                        // Use words[0] as event number, offset for multi-file
+                        event_number = static_cast<int>(words[0]) + event_number_offset;
+
+                        wordOffset = 0;
                         while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
-                            // Bounds check before accessing words vector
-                            if ((size_t)(1 + wordOffset) >= words.size() || (size_t)(2 + wordOffset) >= words.size() || (size_t)(4 + wordOffset) >= words.size() || (size_t)(5 + wordOffset) >= words.size()) {
-                                std::cerr << "[ERROR] Out-of-bounds access in event header parsing. wordOffset=" << wordOffset << ", words.size()=" << words.size() << std::endl;
-                                std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
-                                exit(3);
-                            }
                             device_id = words[1 + wordOffset];
-                            // Convert device_id to hex string with leading zeros, lowercase
                             std::stringstream device_id_ss;
                             device_id_ss << std::hex << std::setw(8) << std::setfill('0') << std::nouppercase << device_id;
                             std::string device_id_str = device_id_ss.str();
@@ -304,15 +302,6 @@ int main(int argc, char* argv[]) {
                             timeStampSec_ns = static_cast<uint64_t>(words[4 + wordOffset]) * 1e9;
                             timeStampNanoSec = static_cast<uint64_t>((words[5 + wordOffset] & 0xFFFFFFFC) >> 2);
                             timestamp = timeStampSec_ns + timeStampNanoSec;
-
-                            // Assign event_number once per event (increment after full event below)
-                            event_number = global_event_number;
-
-                            // Check if we've reached the max events
-                            if (max_events > 0 && event_number >= max_events) {
-                                reached_max_events = true;
-                                break;
-                            }
 
                             int adcOrder = -1;
                             for (size_t idx = 0; idx < adc_addresses.size(); ++idx) {
@@ -400,8 +389,11 @@ int main(int argc, char* argv[]) {
                             }
                             wordOffset += (2 + adcPayloadLength);
 
-                            // Increment global_event_number only after a full event is processed
-                            global_event_number++;
+                            // Check if we've reached the max events
+                            if (max_events > 0 && event_number >= max_events) {
+                                reached_max_events = true;
+                                break;
+                            }
                         }
 
                         words.clear();
@@ -412,6 +404,11 @@ int main(int argc, char* argv[]) {
                     }
 
                     bytesRead += file.gcount();
+                }
+                // For multi-file: update event_number_offset to last event number in this file
+                if (!words.empty()) {
+                    int last_event_number = static_cast<int>(words[0]);
+                    event_number_offset += last_event_number;
                 }
                 file.close();
             }
