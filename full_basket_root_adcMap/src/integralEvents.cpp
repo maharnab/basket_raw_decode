@@ -89,54 +89,6 @@ int main(int argc, char* argv[]) {
     int channel_value = 0;
     std::vector<std::string> adc_addresses;
 
-    // For multi-file mode, set outputFilePath early
-    if (use_file_list) {
-        // Extract first and last .data filenames from the file list
-        std::vector<std::string> filelist_entries;
-        std::ifstream flist(file_list_path);
-        if (flist.is_open()) {
-            std::string line;
-            while (std::getline(flist, line)) {
-                if (!line.empty()) filelist_entries.push_back(line);
-            }
-            flist.close();
-        }
-        std::string first_file, last_file;
-        if (!filelist_entries.empty()) {
-            first_file = std::filesystem::path(filelist_entries.front()).filename().string();
-            last_file = std::filesystem::path(filelist_entries.back()).filename().string();
-        } else {
-            first_file = "unknown";
-            last_file = "unknown";
-        }
-
-        // Helper lambda to extract number before .data and after last _
-        auto extract_num = [](const std::string& fname) -> std::string {
-            size_t dot = fname.rfind(".data");
-            if (dot == std::string::npos) return "unknown";
-            size_t under = fname.rfind('_', dot);
-            if (under == std::string::npos || under + 1 >= dot) return "unknown";
-            return fname.substr(under + 1, dot - under - 1);
-        };
-        std::string first_num = extract_num(first_file);
-        std::string last_num = extract_num(last_file);
-
-        // Use date and base_dir as before
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        std::tm* tm_ptr = std::localtime(&now_c);
-        char year_month_day[11];
-        std::strftime(year_month_day, sizeof(year_month_day), "%Y-%m-%d", tm_ptr);
-
-        // Use the same output dir logic as before
-        std::filesystem::path out_dir = std::filesystem::path(base_dir) / year_month_day;
-        std::filesystem::create_directories(out_dir);
-
-        // Compose output file name: something_firstnum-lastnum.root
-        std::string out_name = "basket" + std::to_string(basket_num) + "_" + first_num + "-" + last_num + ".root";
-        outputFilePath = (out_dir / out_name).string();
-    }
-
     // Unified argument parsing
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -207,6 +159,54 @@ int main(int argc, char* argv[]) {
             if (!line.empty()) data_files.push_back(line);
         }
         flist.close();
+    }
+
+    // For multi-file mode, set outputFilePath early
+    if (use_file_list) {
+        // Extract first and last .data filenames from the file list
+        std::vector<std::string> filelist_entries;
+        std::ifstream flist(file_list_path);
+        if (flist.is_open()) {
+            std::string line;
+            while (std::getline(flist, line)) {
+                if (!line.empty()) filelist_entries.push_back(line);
+            }
+            flist.close();
+        }
+        std::string first_file, last_file;
+        if (!filelist_entries.empty()) {
+            first_file = std::filesystem::path(filelist_entries.front()).filename().string();
+            last_file = std::filesystem::path(filelist_entries.back()).filename().string();
+        } else {
+            first_file = "unknown";
+            last_file = "unknown";
+        }
+
+        // Helper lambda to extract number before .data and after last _
+        auto extract_num = [](const std::string& fname) -> std::string {
+            size_t dot = fname.rfind(".data");
+            if (dot == std::string::npos) return "unknown";
+            size_t under = fname.rfind('_', dot);
+            if (under == std::string::npos || under + 1 >= dot) return "unknown";
+            return fname.substr(under + 1, dot - under - 1);
+        };
+        std::string first_num = extract_num(first_file);
+        std::string last_num = extract_num(last_file);
+
+        // Use date and base_dir as before
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::tm* tm_ptr = std::localtime(&now_c);
+        char year_month_day[11];
+        std::strftime(year_month_day, sizeof(year_month_day), "%Y-%m-%d", tm_ptr);
+
+        // Use the same output dir logic as before
+        std::filesystem::path out_dir = std::filesystem::path(base_dir) / year_month_day;
+        std::filesystem::create_directories(out_dir);
+
+        // Compose output file name: something_firstnum-lastnum.root
+        std::string out_name = "basket" + std::to_string(basket_num) + "_" + first_num + "-" + last_num + ".root";
+        outputFilePath = (out_dir / out_name).string();
     }
 
     // Load ADC addresses for the selected basket before processing files
