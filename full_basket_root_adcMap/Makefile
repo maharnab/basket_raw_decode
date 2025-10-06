@@ -9,13 +9,13 @@ BINDIR = bin
 
 
 # Source files
-SRCS = $(SRCDIR)/deserializeBin.cpp $(SRCDIR)/integralEvents.cpp $(SRCDIR)/displayEvents.cpp
+SRCS = $(SRCDIR)/deserializeBin.cpp $(SRCDIR)/integralEvents.cpp $(SRCDIR)/displayEvents.cpp $(SRCDIR)/integralEvents_strict_doublePeaks.cpp
 
 # Object files - we'll keep them in src for simplicity
 OBJS = $(SRCS:.cpp=.o)
 
 # Target executables - placed in bin
-TARGETS = $(BINDIR)/deserializeBin $(BINDIR)/integralEvents $(BINDIR)/displayEvents
+TARGETS = $(BINDIR)/deserializeBin $(BINDIR)/integralEvents $(BINDIR)/displayEvents $(BINDIR)/integralEvents_strict_doublePeaks
 
 # Default target
 all: $(TARGETS)
@@ -36,6 +36,10 @@ $(BINDIR)/integralEvents: $(SRCDIR)/integralEvents.o | $(BINDIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 $(BINDIR)/displayEvents: $(SRCDIR)/displayEvents.o | $(BINDIR)
+	@echo "Linking $@"
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+$(BINDIR)/integralEvents_strict_doublePeaks: $(SRCDIR)/integralEvents_strict_doublePeaks.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
