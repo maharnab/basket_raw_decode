@@ -475,17 +475,6 @@ int main(int argc, char* argv[]) {
 
                     bytesRead += file.gcount();
                 }
-                // After processing all ADC channels for this event: write entries only if event passed validation
-                if (!skip_event) {
-                    for (const auto &e : eventEntries) {
-                        device_id = e.device_id;
-                        timestamp = e.timestamp;
-                        channel_number = e.channel_number;
-                        channel_value = e.channel_value;
-                        tree->Fill();
-                    }
-                }
-
                 // For multi-file: update event_number_offset to last event number in this file
                 if (!words.empty()) {
                     int last_event_number = static_cast<int>(words[0]);
