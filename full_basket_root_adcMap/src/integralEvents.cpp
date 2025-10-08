@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
                                             int start_idx = minPosition - 4;
                                             int end_idx = minPosition + 16;
                                             if (start_idx < 0 || end_idx > static_cast<int>(adcValues.size())) {
-                                                std::cerr << "[ERROR] Out-of-bounds access in slicedVector. minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
+                                                std::cerr << "[ERROR] Out-of-bounds access in slicedVector. event=" << event_number << " minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
                                                 std::cerr << "[ERROR] slicedVector indices: start_idx=" << start_idx << ", end_idx=" << end_idx << std::endl;
                                                 std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                                 exit(6);
