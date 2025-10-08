@@ -290,6 +290,10 @@ int main(int argc, char* argv[]) {
                         }
 
                         wordOffset = 0;
+                        // Collect per-event channel entries and allow skipping the whole event if any channel fails validation
+                        struct ChannelEntry { uint32_t device_id; uint64_t timestamp; int channel_number; int channel_value; };
+                        std::vector<ChannelEntry> eventEntries;
+                        bool skip_event = false;
                         // Only initialize output on first event of first file (for single file mode, this is always true)
                         if (!output_initialized) {
                             uint64_t first_timestamp = 0;
@@ -341,7 +345,7 @@ int main(int argc, char* argv[]) {
                         event_number = static_cast<int>(words[0]) + event_number_offset;
 
                         wordOffset = 0;
-                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
+                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events && !skip_event) {
                             device_id = words[1 + wordOffset];
                             std::stringstream device_id_ss;
                             device_id_ss << std::hex << std::setw(8) << std::setfill('0') << std::nouppercase << device_id;
@@ -407,10 +411,9 @@ int main(int argc, char* argv[]) {
                                             int start_idx = minPosition - 4;
                                             int end_idx = minPosition + 16;
                                             if (start_idx < 0 || end_idx > static_cast<int>(adcValues.size())) {
-                                                std::cerr << "[ERROR] Out-of-bounds access in slicedVector. event=" << event_number << " minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
-                                                std::cerr << "[ERROR] slicedVector indices: start_idx=" << start_idx << ", end_idx=" << end_idx << std::endl;
-                                                std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
-                                                exit(6);
+                                                // If any channel in this event would cause an OOB slice, skip the entire event silently
+                                                skip_event = true;
+                                                break; // break out of waveform loop j
                                             }
                                             std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
@@ -436,11 +439,12 @@ int main(int argc, char* argv[]) {
                                             channel_number = adcValues[0] + int(adcOrder - 1) * 64;
                                             channel_value = integral * -1;
 
-                                            // event_number is already set for this event
-                                            tree->Fill();
+                                            // Collect this channel entry for writing later if the event remains valid
+                                            eventEntries.push_back(ChannelEntry{device_id, timestamp, channel_number, channel_value});
                                         }
                                     }
                                 }
+                                if (skip_event) break; // break out of n_waveform_loops processing if event marked to skip
                             }
                             wordOffset += (2 + adcPayloadLength);
 
@@ -460,6 +464,17 @@ int main(int argc, char* argv[]) {
 
                     bytesRead += file.gcount();
                 }
+                // After processing all ADC channels for this event: write entries only if event passed validation
+                if (!skip_event) {
+                    for (const auto &e : eventEntries) {
+                        device_id = e.device_id;
+                        timestamp = e.timestamp;
+                        channel_number = e.channel_number;
+                        channel_value = e.channel_value;
+                        tree->Fill();
+                    }
+                }
+
                 // For multi-file: update event_number_offset to last event number in this file
                 if (!words.empty()) {
                     int last_event_number = static_cast<int>(words[0]);
