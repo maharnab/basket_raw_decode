@@ -455,6 +455,17 @@ int main(int argc, char* argv[]) {
                             }
                         }
 
+                        // After processing all ADC channels for this event: write entries only if event passed validation
+                        if (!skip_event) {
+                            for (const auto &e : eventEntries) {
+                                device_id = e.device_id;
+                                timestamp = e.timestamp;
+                                channel_number = e.channel_number;
+                                channel_value = e.channel_value;
+                                tree->Fill();
+                            }
+                        }
+
                         words.clear();
                         bufferSize = 4;
                         buffer.resize(bufferSize);
