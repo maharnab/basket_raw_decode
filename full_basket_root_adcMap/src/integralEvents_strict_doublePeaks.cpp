@@ -15,6 +15,14 @@
 
 using json = nlohmann::json;
 
+// Small buffer entry used to hold branch values until an entire event is validated
+struct BufferedEntry {
+    uint32_t device_id;
+    uint64_t timestamp;
+    int channel_number;
+    int channel_value;
+};
+
 // Check adcValues for multiple inverted peaks.
 // Returns true if more than one inverted peak is detected.
 // Rules implemented:
@@ -22,92 +30,81 @@ using json = nlohmann::json;
 // - Small fluctuations (adjacent diffs <= tolerance) are ignored.
 // - A secondary inverted peak is only considered significant if its local minimum
 //   reaches at or below `deep_threshold` (default -512). Minor dips above that are ignored.
-bool has_multiple_inverted_peaks(const std::vector<int>& adcValues, int tolerance = 256, int deep_threshold = -512, int recovery_threshold = -256) {
-    if (adcValues.empty()) return false;
+// Allocation-free single-pass detector that operates on a plain int pointer.
+// Returns true if more than one significant inverted peak is detected.
+// The function assumes values are pedestal-subtracted (so dips are negative).
+// Parameters:
+//  - vals: pointer to int array
+//  - len: number of elements
+//  - tolerance: ignore small adjacent diffs
+//  - deep_threshold: only consider secondary minima <= this value
+static bool has_multiple_inverted_peaks_ptr(const int* vals, int len, int tolerance = 128, int deep_threshold = -256) {
+    if (len <= 0 || vals == nullptr) return false;
 
-    // Find index of global minimum (first occurrence)
-    auto minIt = std::min_element(adcValues.begin(), adcValues.end());
-    size_t minIdx = std::distance(adcValues.begin(), minIt);
+    // Find global minimum index and value (first occurrence)
+    int minIdx = 0;
+    int minVal = vals[0];
+    for (int i = 1; i < len; ++i) {
+        if (vals[i] < minVal) {
+            minVal = vals[i];
+            minIdx = i;
+        }
+    }
 
-    // State machine: 0 = moving towards min (or initial), 1 = passed min and currently increasing, 2 = saw decrease after increase (secondary peak)
-    // We'll scan left and right of min to detect any additional inverted peaks.
+    // Cheap pre-check: if the global minimum is not deep enough, skip detection.
+    if (minVal > deep_threshold) return false;
 
-    auto scan_side = [&](int start, int step) -> bool {
-        // start: index to start from (one step away from min)
-        // step: -1 (left) or +1 (right)
-        if (start < 0 || static_cast<size_t>(start) >= adcValues.size()) return false;
-
-        enum State { INIT, INCREASING, DECREASING } state = INIT;
-        int last = adcValues[minIdx];
-
-        for (int idx = start; idx >= 0 && static_cast<size_t>(idx) < adcValues.size(); idx += step) {
-            int val = adcValues[idx];
-
-            int diff = val - last;
+    // Scan left of min
+    bool found_secondary = false;
+    // state: 0=unknown/approaching,1=recovered (meaningful rise seen),2=seen secondary dip after recovery
+    auto scan = [&](int start, int step) -> bool {
+        int state = 0; // 0=before any rise, 1=seen rise (recovered)
+        int last = vals[minIdx];
+        int i = start;
+        while (i >= 0 && i < len) {
+            int v = vals[i];
+            int diff = v - last;
             if (std::abs(diff) <= tolerance) {
-                // small fluctuation: ignore for state transitions
+                // ignore small jitter
             } else if (diff > 0) {
-                // rising — only treat as meaningful if we cross recovery_threshold
-                if (val > recovery_threshold) {
-                    if (state == INIT) state = INCREASING;
-                    else if (state == DECREASING) {
-                        // was decreasing and then rising: switch to increasing
-                        state = INCREASING;
-                    }
-                } else {
-                    // still within deep trough; ignore this small rise
-                }
-            } else { // diff < 0 -> falling
-                if (state == INCREASING) {
-                    // We had an increase followed by a decrease -> start tracking candidate local minimum
-                    state = DECREASING;
-                    int candidate_min = val;
-                    int scan_idx = idx + step; // continue into decreasing region
-                    int prev = val;
-                    // Continue scanning while we keep decreasing beyond tolerance to find the true local minimum
-                    for (; scan_idx >= 0 && static_cast<size_t>(scan_idx) < adcValues.size(); scan_idx += step) {
-                        int v2 = adcValues[scan_idx];
-                        int d2 = v2 - prev;
+                // any rise counts as a recovery
+                state = 1;
+            } else { // falling
+                if (state == 1) {
+                    // we saw a rise then a fall -> candidate secondary dip
+                    int local_min = v;
+                    int j = i - step; // continue in same direction
+                    int prev = v;
+                    while (j >= 0 && j < len) {
+                        int vv = vals[j];
+                        int d2 = vv - prev;
                         if (std::abs(d2) <= tolerance) {
-                            // small fluctuation; treat as continuation
+                            // continue
                         } else if (d2 < 0) {
-                            // still decreasing
-                            if (v2 < candidate_min) candidate_min = v2;
+                            if (vv < local_min) local_min = vv;
                         } else {
-                            // it started to rise again; decreasing segment ended
                             break;
                         }
-                        prev = v2;
+                        prev = vv;
+                        j -= step;
                     }
-
-                    // Only consider this a secondary inverted peak if the local minimum is deep enough
-                    if (candidate_min <= deep_threshold) {
-                        return true;
-                    } else {
-                        // Otherwise treat it as noise/insignificant and continue scanning from scan_idx
-                        idx = scan_idx - step; // loop will add step
-                        last = adcValues[std::max(0, scan_idx - step)];
-                        continue;
-                    }
-                } else if (state == INIT) {
-                    // still falling relative to the main min (approaching from the other side) - set DECREASING
-                    state = DECREASING;
+                    if (local_min <= deep_threshold) return true;
+                    // otherwise continue from j
+                    i = j + step; // loop will subtract/add step
+                    last = vals[std::max(0, std::min(len-1, j + step))];
+                    i -= step;
+                    continue;
                 }
             }
-
-            // Update last
-            last = val;
+            last = v;
+            i -= step;
         }
         return false;
     };
 
-    // Scan both sides. If either side detects a secondary inverted peak, return true.
-    bool left_has = false;
-    if (minIdx > 0) left_has = scan_side(static_cast<int>(minIdx) - 1, -1);
-    bool right_has = false;
-    if (minIdx + 1 < adcValues.size()) right_has = scan_side(static_cast<int>(minIdx) + 1, +1);
-
-    return left_has || right_has;
+    if (minIdx - 1 >= 0) found_secondary = scan(minIdx - 1, +1); // left side: scan increasing index towards minIdx (we'll treat symmetrical)
+    if (!found_secondary && minIdx + 1 < len) found_secondary = scan(minIdx + 1, -1);
+    return found_secondary;
 }
 
 std::vector<std::string> get_adc_addresses_from_json(const std::string& json_file, int basket_num) {
@@ -312,6 +309,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // No run-specific logfile; keep progress prints on stdout.
+
     int32_t event_number_offset = 0;
     bool reached_max_events = false;
     for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
@@ -435,6 +434,13 @@ int main(int argc, char* argv[]) {
                         // Use words[0] as event number, offset for multi-file
                         event_number = static_cast<int>(words[0]) + event_number_offset;
 
+                        // Per-event buffer: collect channel entries and only write them when
+                        // the entire event is validated (no multi-peak detections).
+                        static std::vector<BufferedEntry> event_buffer;
+                        if (event_buffer.capacity() == 0) event_buffer.reserve(256);
+                        event_buffer.clear();
+                        bool event_bad = false;
+
                         wordOffset = 0;
                         while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
                             device_id = words[1 + wordOffset];
@@ -473,8 +479,17 @@ int main(int argc, char* argv[]) {
                                 waveform_words = (ch_details_last_byte - 1) / 4 + 1;
 
                                 int n_waveform_loops = (adcPayloadLength - 5) / waveform_words;
+                                // Reusable temporary buffers
+                                static std::vector<int> adcValues;
+                                static std::vector<int> slicedVector;
+                                static std::vector<int> slicedVectorPedSub;
+                                // Reserve some typical sizes if empty
+                                if (adcValues.capacity() == 0) adcValues.reserve(256);
+                                if (slicedVector.capacity() == 0) slicedVector.reserve(64);
+                                if (slicedVectorPedSub.capacity() == 0) slicedVectorPedSub.reserve(64);
+
                                 for (int j = 0; j < n_waveform_loops; j++) {
-                                    std::vector<int> adcValues;
+                                    adcValues.clear();
                                     for (int k = 0; k < waveform_words; k++) {
                                         size_t idx = 8 + j * waveform_words + k + wordOffset;
                                         if (idx >= words.size()) {
@@ -497,15 +512,7 @@ int main(int argc, char* argv[]) {
                                     auto minElement = std::min_element(adcValues.begin(), adcValues.end());
                                     int minPosition = std::distance(adcValues.begin(), minElement);
 
-                                    // Check for multiple inverted peaks in adcValues per user spec.
-                                    if (has_multiple_inverted_peaks(adcValues)) {
-                                        std::cerr << "[FATAL] Multiple inverted peaks detected in event " << event_number << ". Exiting.\n";
-                                        std::cerr << "adcValues (size=" << adcValues.size() << "): ";
-                                        for (size_t _i = 0; _i < adcValues.size(); ++_i) {
-                                            std::cerr << adcValues[_i] << ( _i + 1 < adcValues.size() ? ", " : "\n");
-                                        }
-                                        return 2;
-                                    }
+                                                // We no longer run the expensive detector on the full waveform.
 
                                     if (*minElement < -100) {
                                         if (minPosition > minPosition_lower && minPosition < minPosition_lower + 30) {
@@ -517,25 +524,37 @@ int main(int argc, char* argv[]) {
                                                 std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
                                                 exit(6);
                                             }
-                                            std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
+                                            // Build slicedVector and pedestal-subtracted version using reusable vectors
+                                            slicedVector.clear();
+                                            slicedVector.insert(slicedVector.end(), adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
                                             if (adcValues.size() > 10) {
                                                 pedestal = std::accumulate(adcValues.begin() + 1, adcValues.begin() + 11, 0.0) / 10.0;
                                             }
 
-                                            std::vector<int> slicedVectorPedSub;
-                                            slicedVectorPedSub.reserve(slicedVector.size());
-                                            for (const auto& val : slicedVector) {
-                                                slicedVectorPedSub.push_back(val - static_cast<int>(pedestal));
+                                            slicedVectorPedSub.clear();
+                                            slicedVectorPedSub.resize(slicedVector.size());
+                                            for (size_t si = 0; si < slicedVector.size(); ++si) {
+                                                slicedVectorPedSub[si] = slicedVector[si] - static_cast<int>(pedestal);
                                             }
 
                                             int integral = std::accumulate(slicedVectorPedSub.begin(), slicedVectorPedSub.end(), 0);
                                             channel_number = adcValues[0] + int(adcOrder - 1) * 64;
                                             channel_value = integral * -1;
 
-                                            // event_number is already set for this event
-                                            tree->Fill();
+                                            // Buffer the entry instead of writing immediately
+                                            BufferedEntry be{device_id, timestamp, channel_number, channel_value};
+                                            event_buffer.push_back(be);
+
+                                            // Run the stricter detector on the pedestal-subtracted slice only.
+                                            if (!event_bad) {
+                                                // run allocation-free detector
+                                                if (!slicedVectorPedSub.empty() && has_multiple_inverted_peaks_ptr(slicedVectorPedSub.data(), static_cast<int>(slicedVectorPedSub.size()), /*tolerance=*/256, /*deep_threshold=*/-512)) {
+                                                    // mark event as bad (no logging)
+                                                    event_bad = true;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -546,6 +565,17 @@ int main(int argc, char* argv[]) {
                             if (max_events > 0 && event_number >= max_events) {
                                 reached_max_events = true;
                                 break;
+                            }
+                        }
+
+                        // After finishing all ADC payloads for this event, flush or drop the buffer
+                        if (!event_bad) {
+                            for (const auto& be : event_buffer) {
+                                device_id = be.device_id;
+                                timestamp = be.timestamp;
+                                channel_number = be.channel_number;
+                                channel_value = be.channel_value;
+                                tree->Fill();
                             }
                         }
 
