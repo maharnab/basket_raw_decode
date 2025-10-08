@@ -415,9 +415,15 @@ int main(int argc, char* argv[]) {
                                             std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
-                                            int pedestal_upper = waveform_words / 6;
+                                            // Use an unsigned size type that matches adcValues.size() to avoid signed/unsigned comparison warnings.
+                                            // Round up waveform_words/6 so e.g. 40/6 -> 7 when computing the pedestal window.
+                                            std::vector<int>::size_type pedestal_upper = static_cast<std::vector<int>::size_type>((waveform_words + 5) / 6);
+                                            if (pedestal_upper == 0) pedestal_upper = 1; // guard against divide-by-zero
                                             if (adcValues.size() > pedestal_upper) {
-                                                pedestal = std::accumulate(adcValues.begin() + 1, adcValues.begin() + pedestal_upper + 1, 0.0) / pedestal_upper;
+                                                auto start_it = adcValues.begin() + 1;
+                                                auto end_it = start_it + pedestal_upper; // safe because of the size check above
+                                                double sum = std::accumulate(start_it, end_it, 0.0);
+                                                pedestal = sum / static_cast<double>(pedestal_upper);
                                             }
 
                                             std::vector<int> slicedVectorPedSub;
