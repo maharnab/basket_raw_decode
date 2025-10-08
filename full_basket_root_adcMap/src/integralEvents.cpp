@@ -415,8 +415,9 @@ int main(int argc, char* argv[]) {
                                             std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
-                                            if (adcValues.size() > 10) {
-                                                pedestal = std::accumulate(adcValues.begin() + 1, adcValues.begin() + 11, 0.0) / 10.0;
+                                            int pedestal_upper = waveform_words / 6;
+                                            if (adcValues.size() > pedestal_upper) {
+                                                pedestal = std::accumulate(adcValues.begin() + 1, adcValues.begin() + pedestal_upper + 1, 0.0) / pedestal_upper;
                                             }
 
                                             std::vector<int> slicedVectorPedSub;
