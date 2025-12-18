@@ -1,7 +1,11 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I. -I$(realpath $(CURDIR)/../include) $(shell root-config --cflags)
-LDFLAGS = $(shell root-config --libs)
+
+# Optimization flags for fast execution
+OPTFLAGS = -O3 -march=native -flto -DNDEBUG
+
+CXXFLAGS = -std=c++17 -Wall -Wextra $(OPTFLAGS) -I. -I$(realpath $(CURDIR)/../include) $(shell root-config --cflags)
+LDFLAGS = $(OPTFLAGS) $(shell root-config --libs)
 
 # Project directory structure
 SRCDIR = src
