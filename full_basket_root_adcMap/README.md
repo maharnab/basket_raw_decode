@@ -9,6 +9,7 @@ This project provides tools for working with ADC mapping and event data for the 
   - `deserializeBin.cpp` — C++ program to deserialize binary event data
   - `displayEvents.cpp` — C++ program to display event data
   - `integralEvents.cpp` — C++ program to process/integrate event data
+  - `integralEvents_v2.cpp` — C++ program to process/integrate event data into ROOT RNTuple format with per-waveform t50 timing
 - `adcMap.json` — Output file containing the ADC mapping
 - `Makefile` — Build instructions for all C++ programs
 
@@ -102,6 +103,24 @@ make clean
   - If the `-M` option is used, the ADC order will be taken from the specified snapshot file instead of the default `adcMap.json`.
 
 - **Dependencies:** Requires ROOT libraries.
+
+### 5. integralEvents_v2
+
+- **Purpose:** RNTuple-based implementation of event integration. Writes `event_number`, `device_id`, `timestamp`, `channel_number`, `channel_value`, and `t50_time` (ps) for each selected waveform channel.
+
+- **Usage:**
+
+  Single-file mode:
+  ```sh
+  ./bin/integralEvents_v2 [--max-events N] [-M adcMap.json] <datafile> <minPosition_lower> <output_base_dir> <basket_number>
+  ```
+
+  File-list mode:
+  ```sh
+  ./bin/integralEvents_v2 [--max-events N] [-M adcMap.json] -F <file_list.txt> <minPosition_lower> <output_base_dir> <basket_number>
+  ```
+
+- **Dependencies:** Requires ROOT libraries with RNTuple support.
 
 ## Notes
 - All C++ programs are built with C++17 and require the listed libraries.

@@ -13,13 +13,13 @@ BINDIR = bin
 
 
 # Source files
-SRCS = $(SRCDIR)/deserializeBin.cpp $(SRCDIR)/integralEvents.cpp $(SRCDIR)/displayEvents.cpp $(SRCDIR)/integralEvents_strict_doublePeaks.cpp
+SRCS = $(SRCDIR)/deserializeBin.cpp $(SRCDIR)/integralEvents.cpp $(SRCDIR)/displayEvents.cpp $(SRCDIR)/integralEvents_strict_doublePeaks.cpp $(SRCDIR)/integralEvents_v2.cpp
 
 # Object files - we'll keep them in src for simplicity
 OBJS = $(SRCS:.cpp=.o)
 
 # Target executables - placed in bin
-TARGETS = $(BINDIR)/deserializeBin $(BINDIR)/integralEvents $(BINDIR)/displayEvents $(BINDIR)/integralEvents_strict_doublePeaks
+TARGETS = $(BINDIR)/deserializeBin $(BINDIR)/integralEvents $(BINDIR)/displayEvents $(BINDIR)/integralEvents_strict_doublePeaks $(BINDIR)/integralEvents_v2
 
 # Default target
 all: $(TARGETS)
@@ -47,6 +47,10 @@ $(BINDIR)/integralEvents_strict_doublePeaks: $(SRCDIR)/integralEvents_strict_dou
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
+$(BINDIR)/integralEvents_v2: $(SRCDIR)/integralEvents_v2.o | $(BINDIR)
+	@echo "Linking $@"
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
 # Create bin directory if it doesn't exist
 $(BINDIR):
 	mkdir -p $(BINDIR)
@@ -54,7 +58,7 @@ $(BINDIR):
 # Clean up - remove all generated files in src and bin
 clean:
 	@echo "Cleaning up..."
-	rm -f $(OBJS) $(TARGETS)
+	rm -f $(SRCDIR)/*.o $(TARGETS)
 	rm -rf $(BINDIR)
 
 # Phony targets
