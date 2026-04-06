@@ -9,6 +9,7 @@ This project provides tools for working with ADC mapping and event data for the 
   - `deserializeBin.cpp` — C++ program to deserialize binary event data
   - `displayEvents.cpp` — C++ program to display event data
   - `integralEvents.cpp` — C++ program to process/integrate event data
+  - `integralEvents_v2.cpp` — C++ program to process/integrate event data into ROOT RNTuple format with per-waveform t50 timing
 - `adcMap.json` — Output file containing the ADC mapping
 - `Makefile` — Build instructions for all C++ programs
 
@@ -17,12 +18,12 @@ This project provides tools for working with ADC mapping and event data for the 
 ### System Packages
 - C++17 compatible compiler (e.g., g++)
 - [ROOT](https://root.cern/) (for event-related programs)
-- [nlohmann-json3-dev](https://github.com/nlohmann/json) (header-only JSON library, required for integralEvents)
+
 
 #### Install on Ubuntu/Debian:
 ```sh
 sudo apt-get update
-sudo apt-get install g++ make nlohmann-json3-dev
+sudo apt-get install g++ make
 # Install ROOT as per https://root.cern/install/
 ```
 
@@ -83,21 +84,43 @@ make clean
 
 
 ### 4. integralEvents
-- **Purpose:** Processes or integrates event data, possibly for summary statistics or further analysis.
+
+- **Purpose:** Processes or integrates event data, possibly for summary statistics or further analysis. As of August 2025, event numbers are assigned globally per event (not per channel), and you can optionally limit the number of events processed.
+
 - **Usage:**
 
   Standard mode (uses `adcMap.json`):
   ```sh
-  ./integralEvents <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number>
+  ./integralEvents <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number> [--max-events N]
   ```
 
   With custom ADC map (e.g., a snapshot file):
   ```sh
-  ./integralEvents -M <adcMap_snap_YYYYMMDD_HHMMSS.json> <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number>
+  ./integralEvents -M <adcMap_snap_YYYYMMDD_HHMMSS.json> <binary_file_directory_path> <minPosition_lower> <output_base_dir> <basket_number> [--max-events N]
   ```
 
-  If the `-M` option is used, the ADC order will be taken from the specified snapshot file instead of the default `adcMap.json`.
+  - The optional `--max-events N` argument will process only the first N global events from the data file(s).
+  - If the `-M` option is used, the ADC order will be taken from the specified snapshot file instead of the default `adcMap.json`.
+
 - **Dependencies:** Requires ROOT libraries.
+
+### 5. integralEvents_v2
+
+- **Purpose:** RNTuple-based implementation of event integration. Writes `event_number`, `device_id`, `timestamp`, `channel_number`, `channel_value`, and `t50_time` (ps) for each selected waveform channel.
+
+- **Usage:**
+
+  Single-file mode:
+  ```sh
+  ./bin/integralEvents_v2 [--max-events N] [-M adcMap.json] <datafile> <minPosition_lower> <output_base_dir> <basket_number>
+  ```
+
+  File-list mode:
+  ```sh
+  ./bin/integralEvents_v2 [--max-events N] [-M adcMap.json] -F <file_list.txt> <minPosition_lower> <output_base_dir> <basket_number>
+  ```
+
+- **Dependencies:** Requires ROOT libraries with RNTuple support.
 
 ## Notes
 - All C++ programs are built with C++17 and require the listed libraries.

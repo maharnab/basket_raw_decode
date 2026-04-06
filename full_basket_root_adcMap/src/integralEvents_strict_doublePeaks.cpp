@@ -15,6 +15,98 @@
 
 using json = nlohmann::json;
 
+// Small buffer entry used to hold branch values until an entire event is validated
+struct BufferedEntry {
+    uint32_t device_id;
+    uint64_t timestamp;
+    int channel_number;
+    int channel_value;
+};
+
+// Check adcValues for multiple inverted peaks.
+// Returns true if more than one inverted peak is detected.
+// Rules implemented:
+// - The main (lowest) peak is the global minimum.
+// - Small fluctuations (adjacent diffs <= tolerance) are ignored.
+// - A secondary inverted peak is only considered significant if its local minimum
+//   reaches at or below `deep_threshold` (default -512). Minor dips above that are ignored.
+// Allocation-free single-pass detector that operates on a plain int pointer.
+// Returns true if more than one significant inverted peak is detected.
+// The function assumes values are pedestal-subtracted (so dips are negative).
+// Parameters:
+//  - vals: pointer to int array
+//  - len: number of elements
+//  - tolerance: ignore small adjacent diffs
+//  - deep_threshold: only consider secondary minima <= this value
+static bool has_multiple_inverted_peaks_ptr(const int* vals, int len, int tolerance = 128, int deep_threshold = -256) {
+    if (len <= 0 || vals == nullptr) return false;
+
+    // Find global minimum index and value (first occurrence)
+    int minIdx = 0;
+    int minVal = vals[0];
+    for (int i = 1; i < len; ++i) {
+        if (vals[i] < minVal) {
+            minVal = vals[i];
+            minIdx = i;
+        }
+    }
+
+    // Cheap pre-check: if the global minimum is not deep enough, skip detection.
+    if (minVal > deep_threshold) return false;
+
+    // Scan left of min
+    bool found_secondary = false;
+    // state: 0=unknown/approaching,1=recovered (meaningful rise seen),2=seen secondary dip after recovery
+    auto scan = [&](int start, int step) -> bool {
+        int state = 0; // 0=before any rise, 1=seen rise (recovered)
+        int last = vals[minIdx];
+        int i = start;
+        while (i >= 0 && i < len) {
+            int v = vals[i];
+            int diff = v - last;
+            if (std::abs(diff) <= tolerance) {
+                // ignore small jitter
+            } else if (diff > 0) {
+                // any rise counts as a recovery
+                state = 1;
+            } else { // falling
+                if (state == 1) {
+                    // we saw a rise then a fall -> candidate secondary dip
+                    int local_min = v;
+                    int j = i - step; // continue in same direction
+                    int prev = v;
+                    while (j >= 0 && j < len) {
+                        int vv = vals[j];
+                        int d2 = vv - prev;
+                        if (std::abs(d2) <= tolerance) {
+                            // continue
+                        } else if (d2 < 0) {
+                            if (vv < local_min) local_min = vv;
+                        } else {
+                            break;
+                        }
+                        prev = vv;
+                        j -= step;
+                    }
+                    if (local_min <= deep_threshold) return true;
+                    // otherwise continue from j
+                    i = j + step; // loop will subtract/add step
+                    last = vals[std::max(0, std::min(len-1, j + step))];
+                    i -= step;
+                    continue;
+                }
+            }
+            last = v;
+            i -= step;
+        }
+        return false;
+    };
+
+    if (minIdx - 1 >= 0) found_secondary = scan(minIdx - 1, +1); // left side: scan increasing index towards minIdx (we'll treat symmetrical)
+    if (!found_secondary && minIdx + 1 < len) found_secondary = scan(minIdx + 1, -1);
+    return found_secondary;
+}
+
 std::vector<std::string> get_adc_addresses_from_json(const std::string& json_file, int basket_num) {
     std::ifstream ifs(json_file);
     if (!ifs.is_open()) {
@@ -217,6 +309,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // No run-specific logfile; keep progress prints on stdout.
+
     int32_t event_number_offset = 0;
     bool reached_max_events = false;
     for (size_t file_idx = 0; file_idx < data_files.size() && !reached_max_events; ++file_idx) {
@@ -290,10 +384,6 @@ int main(int argc, char* argv[]) {
                         }
 
                         wordOffset = 0;
-                        // Collect per-event channel entries and allow skipping the whole event if any channel fails validation
-                        struct ChannelEntry { uint32_t device_id; uint64_t timestamp; int channel_number; int channel_value; };
-                        std::vector<ChannelEntry> eventEntries;
-                        bool skip_event = false;
                         // Only initialize output on first event of first file (for single file mode, this is always true)
                         if (!output_initialized) {
                             uint64_t first_timestamp = 0;
@@ -344,8 +434,15 @@ int main(int argc, char* argv[]) {
                         // Use words[0] as event number, offset for multi-file
                         event_number = static_cast<int>(words[0]) + event_number_offset;
 
+                        // Per-event buffer: collect channel entries and only write them when
+                        // the entire event is validated (no multi-peak detections).
+                        static std::vector<BufferedEntry> event_buffer;
+                        if (event_buffer.capacity() == 0) event_buffer.reserve(256);
+                        event_buffer.clear();
+                        bool event_bad = false;
+
                         wordOffset = 0;
-                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events && !skip_event) {
+                        while (static_cast<std::vector<unsigned int>::size_type>(wordOffset) < (words.size() - 1) && !reached_max_events) {
                             device_id = words[1 + wordOffset];
                             std::stringstream device_id_ss;
                             device_id_ss << std::hex << std::setw(8) << std::setfill('0') << std::nouppercase << device_id;
@@ -382,8 +479,17 @@ int main(int argc, char* argv[]) {
                                 waveform_words = (ch_details_last_byte - 1) / 4 + 1;
 
                                 int n_waveform_loops = (adcPayloadLength - 5) / waveform_words;
+                                // Reusable temporary buffers
+                                static std::vector<int> adcValues;
+                                static std::vector<int> slicedVector;
+                                static std::vector<int> slicedVectorPedSub;
+                                // Reserve some typical sizes if empty
+                                if (adcValues.capacity() == 0) adcValues.reserve(256);
+                                if (slicedVector.capacity() == 0) slicedVector.reserve(64);
+                                if (slicedVectorPedSub.capacity() == 0) slicedVectorPedSub.reserve(64);
+
                                 for (int j = 0; j < n_waveform_loops; j++) {
-                                    std::vector<int> adcValues;
+                                    adcValues.clear();
                                     for (int k = 0; k < waveform_words; k++) {
                                         size_t idx = 8 + j * waveform_words + k + wordOffset;
                                         if (idx >= words.size()) {
@@ -406,45 +512,52 @@ int main(int argc, char* argv[]) {
                                     auto minElement = std::min_element(adcValues.begin(), adcValues.end());
                                     int minPosition = std::distance(adcValues.begin(), minElement);
 
+                                                // We no longer run the expensive detector on the full waveform.
+
                                     if (*minElement < -100) {
                                         if (minPosition > minPosition_lower && minPosition < minPosition_lower + 30) {
                                             int start_idx = minPosition - 4;
                                             int end_idx = minPosition + 16;
                                             if (start_idx < 0 || end_idx > static_cast<int>(adcValues.size())) {
-                                                // If any channel in this event would cause an OOB slice, skip the entire event silently
-                                                skip_event = true;
-                                                break; // break out of waveform loop j
+                                                std::cerr << "[ERROR] Out-of-bounds access in slicedVector. minPosition=" << minPosition << ", adcValues.size()=" << adcValues.size() << std::endl;
+                                                std::cerr << "[ERROR] slicedVector indices: start_idx=" << start_idx << ", end_idx=" << end_idx << std::endl;
+                                                std::cerr << "[ERROR] basket_num=" << basket_num << std::endl;
+                                                exit(6);
                                             }
-                                            std::vector<int> slicedVector(adcValues.begin() + start_idx, adcValues.begin() + end_idx);
+                                            // Build slicedVector and pedestal-subtracted version using reusable vectors
+                                            slicedVector.clear();
+                                            slicedVector.insert(slicedVector.end(), adcValues.begin() + start_idx, adcValues.begin() + end_idx);
 
                                             double pedestal = 0.0;
-                                            // Use an unsigned size type that matches adcValues.size() to avoid signed/unsigned comparison warnings.
-                                            // Round up waveform_words/6 so e.g. 40/6 -> 7 when computing the pedestal window.
-                                            std::vector<int>::size_type pedestal_upper = static_cast<std::vector<int>::size_type>((waveform_words + 5) / 6);
-                                            if (pedestal_upper == 0) pedestal_upper = 1; // guard against divide-by-zero
-                                            if (adcValues.size() > pedestal_upper) {
-                                                auto start_it = adcValues.begin() + 1;
-                                                auto end_it = start_it + pedestal_upper; // safe because of the size check above
-                                                double sum = std::accumulate(start_it, end_it, 0.0);
-                                                pedestal = sum / static_cast<double>(pedestal_upper);
+                                            if (adcValues.size() > 10) {
+                                                pedestal = std::accumulate(adcValues.begin() + 1, adcValues.begin() + 11, 0.0) / 10.0;
                                             }
 
-                                            std::vector<int> slicedVectorPedSub;
-                                            slicedVectorPedSub.reserve(slicedVector.size());
-                                            for (const auto& val : slicedVector) {
-                                                slicedVectorPedSub.push_back(val - static_cast<int>(pedestal));
+                                            slicedVectorPedSub.clear();
+                                            slicedVectorPedSub.resize(slicedVector.size());
+                                            for (size_t si = 0; si < slicedVector.size(); ++si) {
+                                                slicedVectorPedSub[si] = slicedVector[si] - static_cast<int>(pedestal);
                                             }
 
                                             int integral = std::accumulate(slicedVectorPedSub.begin(), slicedVectorPedSub.end(), 0);
                                             channel_number = adcValues[0] + int(adcOrder - 1) * 64;
                                             channel_value = integral * -1;
 
-                                            // Collect this channel entry for writing later if the event remains valid
-                                            eventEntries.push_back(ChannelEntry{device_id, timestamp, channel_number, channel_value});
+                                            // Buffer the entry instead of writing immediately
+                                            BufferedEntry be{device_id, timestamp, channel_number, channel_value};
+                                            event_buffer.push_back(be);
+
+                                            // Run the stricter detector on the pedestal-subtracted slice only.
+                                            if (!event_bad) {
+                                                // run allocation-free detector
+                                                if (!slicedVectorPedSub.empty() && has_multiple_inverted_peaks_ptr(slicedVectorPedSub.data(), static_cast<int>(slicedVectorPedSub.size()), /*tolerance=*/256, /*deep_threshold=*/-512)) {
+                                                    // mark event as bad (no logging)
+                                                    event_bad = true;
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                                if (skip_event) break; // break out of n_waveform_loops processing if event marked to skip
                             }
                             wordOffset += (2 + adcPayloadLength);
 
@@ -455,13 +568,13 @@ int main(int argc, char* argv[]) {
                             }
                         }
 
-                        // After processing all ADC channels for this event: write entries only if event passed validation
-                        if (!skip_event) {
-                            for (const auto &e : eventEntries) {
-                                device_id = e.device_id;
-                                timestamp = e.timestamp;
-                                channel_number = e.channel_number;
-                                channel_value = e.channel_value;
+                        // After finishing all ADC payloads for this event, flush or drop the buffer
+                        if (!event_bad) {
+                            for (const auto& be : event_buffer) {
+                                device_id = be.device_id;
+                                timestamp = be.timestamp;
+                                channel_number = be.channel_number;
+                                channel_value = be.channel_value;
                                 tree->Fill();
                             }
                         }

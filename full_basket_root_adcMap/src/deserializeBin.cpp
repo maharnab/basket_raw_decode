@@ -59,6 +59,9 @@ int main(int argc, char* argv[]) {
     }
 
     Long64_t nentries = tree->GetEntries();
+    // Limit to first 100 events
+    // Long64_t max_events = 1000;
+    // if (nentries > max_events) nentries = max_events;
     int32_t prev_event = -1;
     // To store all (channel_number, device_id, timestamp) for current event
     std::vector<std::tuple<int32_t, uint32_t, uint64_t, int32_t>> event_channels;
