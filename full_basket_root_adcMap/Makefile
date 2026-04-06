@@ -34,22 +34,27 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.cpp
 $(BINDIR)/deserializeBin: $(SRCDIR)/deserializeBin.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@rm -f $^
 
 $(BINDIR)/integralEvents: $(SRCDIR)/integralEvents.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@rm -f $^
 
 $(BINDIR)/displayEvents: $(SRCDIR)/displayEvents.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@rm -f $^
 
 $(BINDIR)/integralEvents_strict_doublePeaks: $(SRCDIR)/integralEvents_strict_doublePeaks.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@rm -f $^
 
 $(BINDIR)/integralEvents_v2: $(SRCDIR)/integralEvents_v2.o | $(BINDIR)
 	@echo "Linking $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@rm -f $^
 
 # Create bin directory if it doesn't exist
 $(BINDIR):
